@@ -1,0 +1,26 @@
+{{ define "title_success" -}}
+✅ 🖥️ ARCADE · 💾 Backup locale
+{{- end }}
+
+{{ define "body_success" -}}
+📁 S:\Docker Volumes
+
+📦 Dimensione: {{ .Stats.BackupFile.Size | formatBytesBin }}
+⌛ Durata: {{ .Stats.TookTime }}
+🛑 Container fermati: {{ .Stats.Containers.Stopped }}/{{ .Stats.Containers.All }}{{ if .Stats.Containers.StopErrors }} — ⚠️ {{ .Stats.Containers.StopErrors }} errori{{ end }}
+🗂 Archivi presenti: {{ .Stats.Storages.Local.Total }}{{ if .Stats.Storages.Local.Pruned }} ({{ .Stats.Storages.Local.Pruned }} ruotati){{ end }}
+🕒 {{ .Stats.StartTime | formatTime }}
+{{- end }}
+
+{{ define "title_failure" -}}
+🔴 🖥️ ARCADE · 💾 Backup locale
+{{- end }}
+
+{{ define "body_failure" -}}
+📁 S:\Docker Volumes
+
+❌ {{ .Error }}
+
+🕒 {{ .Stats.StartTime | formatTime }}
+🔍 Dettagli: docker logs dvb-local
+{{- end }}

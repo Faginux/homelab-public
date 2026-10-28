@@ -1,0 +1,96 @@
+# =============================================================================
+#  Stack: qbit_manage  --  ARCADE
+#  Management of qBittorrent (Windows app, bare metal): tags by tracker and
+#  share limits. All the destructive functions (rem_orphaned, rem_unregistered,
+#  recheck, cat_update, tag_nohardlinks) are off below. If you turn one on,
+#  first read config.yml again (root_dir/recycle_bin).
+#
+#  Moved into the repo on 2026-09-30 (before, it ran from
+#  S:\Bakcup_Servarr+\Docker yml\qbit_manage\). The project name did not change
+#  (COMPOSE_PROJECT_NAME=qbit_manage). The data moved to S:/docker-appdata.
+#
+#  ⚠️ TEMPORARY STATE since 2026-09-30 -- a deviation to remove.
+#    The flag is QBT_SKIP_QB_VERSION_CHECK=true.
+#    qbit_manage refuses a qBittorrent newer than the version that its library
+#    `qbittorrent-api` declares (it was v5.2.3). qBittorrent 5.2.4 came out on
+#    2026-09-28. The flag makes it a WARN.
+#  When the Telegram alert of QbitCompat-Check tells that upstream supports the
+#  installed version: remove the flag, then `docker compose pull` and (after
+#  confirmation) `up -d`. Details: PROBLEMI-E-SOLUZIONI.md, §13.2.
+#
+#  Restart policy: `unless-stopped` since 2026-10-06. From 2026-09-30 it was
+#  "no", because `always` starts again, at a Docker Desktop restart, also a
+#  container that the operator stopped by hand. But with "no" it did not start
+#  again after the Docker Desktop updates (it occurred on 2026-10-06).
+#  `unless-stopped` starts only the containers that ran when the daemon stopped.
+#  While the flag above is on, there is no risk of a crash loop because of the
+#  version.
+#
+#  Tags (config.yml, fewer since 2026-09-30): private tracker A, private tracker B, `other`,
+#  ~limit_TL and ~limit_DC. `other` is one tag for all other trackers, not one for
+#  each domain. ~limit_TL and ~limit_DC are the custom_tag of the share limit
+#  groups. Off: private (empty private_tag), stalledDL (tag_stalled_torrents:
+#  false), tag of the group `default` (add_group_to_tag: false). qbit_manage does
+#  NOT remove the tags that are off from the torrents that already have them. A
+#  call to /api/v2/torrents/deleteTags removed the tag `private` in qBittorrent on
+#  2026-09-30. qbit_manage replaced the old ~share_limit_N.* tags at the first
+#  run (58 torrents -> ~limit_TL).
+#
+#  Internal schedule: QBT_SCHEDULE=10 minutes from the container start. It is not
+#  at a fixed time: each restart sets it again. QBT_RUN=false = it stays running.
+#  It was 1440 (one time each day) until 2026-10-16. The torrents added after the
+#  run had no tag for up to 24 h (on 2026-10-16, 20 of 27). A run takes 0-2 s.
+#  Since 2026-10-14 it is a Komodo Stack. Updates come from the gate (label
+#  watchtower enable=false), not from Watchtower.
+#
+#  Share limits (2026-10-16): groups private-tracker-a and default = ratio 2.0 OR
+#  11580 min (8 days + 1 h). The first limit that occurs applies. qB stops the
+#  torrent (state "Completed") and Sonarr/Radarr remove it. H&R rule of private tracker A: ratio
+#  1.0 or the days of the class (Power User = 8 days, on 2026-10-16).
+#  If the class changes, max_seeding_time changes. Before you work on the
+#  torrents, ASK THE OPERATOR if it changed. Full table and rules: README.md.
+#  Without the time limit, the torrents with a low ratio never stopped
+#  (disable_qbt_default_share_limits=true removes the qB limit of 10 days).
+#  In private-tracker-a do NOT set min_seeding_time again. Above the max, it makes
+#  the time longer (tag MinSeedTimeNotReached clears the limits). qbit_manage
+#  reads the config again at each run, no restart.
+#  Since 2026-10-25: default (public trackers, no H&R) = ratio 2.0 OR
+#  2880 min (48 h). The group private-tracker-b = ratio 2.0 OR 7260 min (120 h + 1 h).
+#  It has min_seeding_time 7200 as a floor (below the max, it does not make the
+#  time longer). Sonarr/Radarr remove a torrent ONLY if qB stopped it AND it is
+#  at its limit (HasReachedSeedLimit). A manual stop before the limit leaves the files on
+#  S: (it occurred on 2026-10-25, the operator removed 7 torrents by hand).
+#
+#  Secrets: host/user/pass ONLY in config.yml in QBIT_CONFIG. This file is outside
+#  the repo, in the encrypted backup of S:/docker-appdata. Path A of Phase 1
+#  (2026-10-14, PIANO-KOMODO-SECRETS-GATE.md §2b.3 B). The image reads no files and
+#  !ENV only does os.getenv. So no env_file and no QBIT_USER/QBIT_PASS in the .env.
+# =============================================================================
+
+services:
+  qbit_manage:
+    container_name: qbit_manage
+    image: ghcr.io/stuffanthings/qbit_manage:latest
+    volumes:
+      # config.yml + logs/ + .backups/ -- absolute path (CLAUDE.md, Trappola 1)
+      - ${QBIT_CONFIG}:/config:rw
+    environment:
+      - QBT_RUN=false
+      - QBT_SCHEDULE=10
+      - QBT_DRY_RUN=false
+      # TEMPORARY, refer to the header. Name checked in upstream qbit_manage.py:
+      # get_arg("QBT_SKIP_QB_VERSION_CHECK", ..., arg_bool=True)
+      - QBT_SKIP_QB_VERSION_CHECK=true
+      - QBT_TAG_UPDATE=true
+      - QBT_SHARE_LIMITS=true
+      - QBT_RECHECK=false
+      - QBT_CAT_UPDATE=false
+      - QBT_REM_UNREGISTERED=false
+      - QBT_REM_ORPHANED=false
+      - QBT_TAG_TRACKER_ERROR=false
+      - QBT_TAG_NOHARDLINKS=false
+      - QBT_LOG_LEVEL=INFO
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    # Not `always`: refer to "Restart policy" in the header of the file
+    restart: unless-stopped

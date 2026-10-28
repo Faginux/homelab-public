@@ -1,0 +1,33 @@
+## =============================================================================
+##  Komodo Periphery -- the-grid, systemd service komodo-periphery
+##  Read DIRECTLY from the repo (--config-path in the unit). After a git pull that
+##  changes it, run "sudo systemctl restart komodo-periphery".
+##
+##  Only the keys that differ from the defaults or that must be declared. All the
+##  rest takes the default documented in config/periphery.config.toml upstream
+##  (v2.3.3). No secrets here: the onboarding key arrives one time only from
+##  /etc/komodo/periphery-onboarding.env (see README.md).
+## =============================================================================
+
+## Periphery keys (keys/periphery.key) and work folders of Komodo
+## (stacks/, repos/, builds/). They stay empty until you create Stacks that Komodo manages.
+## Under /srv/docker: covered by the backup like the rest of the-grid.
+root_directory = "/srv/docker/komodo/periphery"
+
+## v2: Periphery connects to Core, outbound through websocket. Core is also
+## published on loopback: the connection does not depend on Tailscale.
+core_address = "ws://127.0.0.1:9120"
+## Name with which the server appears in Komodo.
+connect_as = "the-grid"
+
+## With core_address set the default is already false. It is explicit because it is
+## the main security difference from v1. Periphery does NOT open any port (no 8120
+## in listening).
+server_enabled = false
+
+## Terminal on the HOST from the UI: off. It would be a shell of ops
+## (docker group = root in practice) open from a browser tab.
+disable_terminals = true
+## Terminal INSIDE the containers (exec/attach): on, it is the useful thing from
+## a console. Set it to true again if you do not use it.
+disable_container_terminals = false

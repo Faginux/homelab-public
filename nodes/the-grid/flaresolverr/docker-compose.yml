@@ -1,0 +1,60 @@
+# =============================================================================
+#  Stack: FLARESOLVERR  --  the-grid (GMKtec NucBox G11)
+#  Phase 4, first migrated service: a test bench for the mechanics (network, log
+#  rotation, restart policy, DNS). No state of value -- /config is an
+#  anonymous volume declared by the image, not a bind mount. If Docker creates it
+#  again empty, this is fine (see PIANO-MIGRAZIONE-STACK-the-grid.md §2).
+#
+#  Source of truth for this file: NOT the copy in stacks/media/
+#  flaresolverr/ of the repo. That copy is out of sync and older than the fix of 2026-07-29.
+#  The source of truth is S:\Bakcup_Servarr+\Docker yml\flaresolverr\docker-compose.yml on
+#  ARCADE. We cross-checked it with `docker inspect` on the live container on
+#  2026-08-27 (mem_limit, restart policy and port bind come from there).
+# =============================================================================
+
+services:
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    mem_limit: 3g          # real value in production (raised from 2g on
+                            # 2026-07-29 for a burst of concurrent requests)
+    cpus: 1.5
+    restart: unless-stopped
+    labels:
+      # Managed by Komodo since 2026-09-23 (PIANO-KOMODO-SECRETS-GATE.md Phase 2):
+      # updates go through the gate + manual Deploy, not through Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    # Chromium creates a throwaway user-data-dir in /tmp for each session and never
+    # removes it. On tmpfs they live in RAM. Each start clears them
+    # -> the 4:00 restart from the host crontab (see below) is also the
+    # cleanup.
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Europe/Rome
+    ports:
+      # Bind on the Tailscale IP of the-grid, not 0.0.0.0: FlareSolverr has no
+      # authentication. On ARCADE it ran on 127.0.0.1 because the *arr
+      # are bare-metal on the same machine. Here they are on a different host,
+      # so loopback is not enough. The tailnet stays an encrypted channel,
+      # limited to the known nodes, not an open LAN. Decided with the operator on
+      # 2026-08-27. The *arr on ARCADE must point to
+      # 198.51.100.20:8191 instead of 127.0.0.1:8191.
+      - "198.51.100.20:8191:8191"
+
+  # flaresolverr-cron REMOVED on 2026-09-12 (RETI-DOCKER.md §5). It was a whole
+  # container (docker:cli) with full access to the Docker socket. It only ran
+  # "docker restart flaresolverr" one time each day. The same
+  # result needs zero containers and zero docker.sock mounts more. One
+  # crontab line at host level on the-grid does it (user ops, already in the docker
+  # group):
+  #
+  #   0 4 * * * /usr/bin/docker restart flaresolverr >>/home/ops/flaresolverr-restart.log 2>&1
+  #
+  # NOTE: the first draft pointed to /var/log/, root:root 755 - a normal user
+  # cannot write there. A failed redirect would stop "docker restart"
+  # from starting. It would not only lose the log. Changed to the home of ops
+  # (writable, verified) before the first run (RETI-DOCKER.md §5).
+  #
+  # Activated only after a separate explicit confirmation (Regola numero uno, rule number one).

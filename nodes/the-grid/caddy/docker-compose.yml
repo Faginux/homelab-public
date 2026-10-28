@@ -1,0 +1,98 @@
+# =============================================================================
+#  Stack: CADDY + CROWDSEC  --  the-grid (GMKtec NucBox G11)
+#  Phase 8. Cutover of the edge from ARCADE. See PIANO-MIGRAZIONE-STACK-the-grid.md
+#  Phase 8 for the complete strategy (parallel with no traffic -> validation
+#  -> CrowdSec -> port forward -> stop of the source Caddy).
+#
+#  ONE DELIBERATE CHANGE compared with the source (stacks/edge/caddy/):
+#  named volumes -> bind mount on /srv/docker/caddy/. Same reason as
+#  paperless: nodes/the-grid/backup/docker-compose.yml covers all of
+#  /srv/docker automatically, and a named volume would need to be added to the
+#  backup by hand. No functional impact. This is the very first initialization
+#  of this data on this host (no problem of earlier UID).
+#
+#  Caddyfile: it is the IDENTICAL COPY of the live file of ARCADE (S:\caddy\
+#  Caddyfile). It already uses static IPs (LAN/Tailscale) instead of
+#  container names or host.docker.internal -- see PIANO Phase 8, point 1. No
+#  second version to keep by hand: copy it, do not rewrite it.
+#
+#  NO "proxy" network: it does not exist on the-grid. No stack already migrated
+#  uses it. Clients reach all of them through IP/published port. The
+#  Caddyfile now has all static IPs, so Caddy does not need to resolve any container
+#  name. To declare it "external: true" would make the first "up" fail with a
+#  network that does not exist. caddy and crowdsec talk on the default network
+#  of the project (Compose creates it automatically).
+# =============================================================================
+
+services:
+  caddy:
+    # Pinned BY DIGEST on the build really running (2026-09-22). It is
+    # the build of 2026-08-01, version label 2.11.4. Custom image
+    # with one maintainer (serfriz/caddy-custom-builds) that rebuilds automatically
+    # on the 1st of the month, the SAME day/hour as the old Watchtower cycle.
+    # The operator removed Watchtower on 2026-10-14.
+    # The pin to the "2.11.4" tag alone (000a359, 14/09) was NOT enough. The tag is
+    # MUTABLE. On 22/09 ":2.11.4" and ":latest" both point to the rebuild
+    # of 01/09 (same label 2.11.4, different digest). The tag below is
+    # informative only: with tag@digest Docker uses the digest. The label excludes
+    # Watchtower. The operator updates the edge by hand,
+    # by changing the digest after a test.
+    image: serfriz/caddy-cloudflare-ddns-crowdsec:2.11.4@sha256:29370832f2e3bf407ca627931fe0f9871586758784c35ffe11706e19c8fbd14e
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      # automatic redirect http->https: the Servarr logins redirect to http://
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"    # HTTP/3 QUIC
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/docker/caddy/data:/data
+      - /srv/docker/caddy/config:/config
+      - /srv/docker/caddy/logs:/var/log/caddy
+    environment:
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      CROWDSEC_API_KEY: ${CROWDSEC_API_KEY}
+    depends_on:
+      crowdsec:
+        condition: service_healthy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+      # dvb-local stops it during the backup (Tue+Fri 03:00, ~30 s of sites down,
+      # OK of the operator 2026-10-06). Caddy writes logs/access.log all the time. On
+      # 06/10 the file grew while dvb was copying it ("archive/tar: write too
+      # long") and dvb discarded the whole archive. PROBLEMI-E-SOLUZIONI.md §13.4
+      - "docker-volume-backup.stop-during-backup=true"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  crowdsec:
+    # Pinned BY DIGEST on 2026-10-14, on the running build (v1.8.1 of
+    # 2026-09-03). That day ":v1.8.1" and ":latest" had the same digest.
+    # Before, it was ":latest" and Watchtower updated it on the 1st of the month.
+    # We removed Watchtower on the-grid on 14/10 (PIANO-KOMODO-SECRETS-GATE.md, Phase 4).
+    # The caddy stack stays outside Komodo. Update it by hand, like Caddy:
+    # new tag + digest, dry-run, recreate with the OK of the operator.
+    image: crowdsecurity/crowdsec:v1.8.1@sha256:0f2523fa61ef507f15d953045cface490cc880670c62f2755ced17524107f71a
+    container_name: crowdsec
+    restart: unless-stopped
+    volumes:
+      - /srv/docker/caddy/crowdsec-config:/etc/crowdsec
+      - /srv/docker/caddy/crowdsec-data:/var/lib/crowdsec/data
+      - /srv/docker/caddy/logs:/var/log/caddy:ro
+      - ./acquis.yaml:/etc/crowdsec/acquis.d/caddy.yaml:ro
+      # Whitelist of the .wasm modules of qbtmud. Without it, loading the
+      # qbit WebUI with an empty cache bans your own IP (2026-09-23, see the
+      # comment in the file). Single file: after a pull, --force-recreate is necessary.
+      - ./crowdsec-whitelist-qbit-wasm.yaml:/etc/crowdsec/parsers/s02-enrich/ops-qbit-wasm-whitelist.yaml:ro
+    environment:
+      COLLECTIONS: "crowdsecurity/caddy crowdsecurity/base-http-scenarios"
+    healthcheck:
+      test: ["CMD", "cscli", "lapi", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

@@ -1,0 +1,147 @@
+---
+# Homepage services. Reference: https://gethomepage.dev/configs/services/
+#
+# Rules for this file:
+# - href: the URL that the browser opens (the Caddy route).
+# - siteMonitor: the backend address that Caddy uses (from the Caddyfile
+#   on the-grid). The Homepage server sends a HEAD request to it. Do not use the
+#   public URL here: from the scope it goes through Cloudflare.
+# - A secret is always {{HOMEPAGE_VAR_...}}. The value is in .env only.
+# - Widgets on: Komodo, Seerr and Tdarr. Read README.md, "Widgets".
+
+- Monitoring:
+    - Komodo:
+        icon: komodo.svg
+        href: https://komodo.homelab.example
+        description: Stacks and containers (the-grid, ARCADE)
+        siteMonitor: http://198.51.100.20:9120
+        widget:
+          type: komodo
+          # Core directly on the Tailscale IP of the-grid, not through Caddy.
+          # The widget adds "/read" to this URL.
+          url: http://198.51.100.20:9120
+          key: "{{HOMEPAGE_VAR_KOMODO_KEY}}"
+          secret: "{{HOMEPAGE_VAR_KOMODO_SECRET}}"
+          showSummary: true
+
+    - Seerr:
+        icon: seerr.svg
+        href: https://seerr.homelab.example
+        description: Requests (the-grid)
+        siteMonitor: http://198.51.100.20:5055
+        widget:
+          type: seerr
+          # Same backend as siteMonitor (Seerr on the Tailscale IP of the-grid).
+          # The widget sends GET <url>/api/v1/request/count with the header
+          # X-API-Key. The key is the admin key of Seerr: there is no
+          # read-only key. Default fields: pending, approved, completed.
+          url: http://198.51.100.20:5055
+          key: "{{HOMEPAGE_VAR_SEERR_KEY}}"
+
+    - Beszel:
+        icon: beszel.svg
+        href: https://beszel.homelab.example
+        description: Host metrics (hub on scope)
+        siteMonitor: http://192.0.2.30:8090
+        # The Beszel widget is OFF. It needs the credentials of a Beszel
+        # SUPERUSER (PocketBase collection "_superusers"): there is no
+        # read-only mode. Read README.md, "Widgets", before you remove
+        # the comments.
+        # widget:
+        #   type: beszel
+        #   url: http://192.0.2.30:8090
+        #   username: "{{HOMEPAGE_VAR_BESZEL_USERNAME}}"
+        #   password: "{{HOMEPAGE_VAR_BESZEL_PASSWORD}}"
+        #   version: 2
+
+    # The next two cards fill the second row of the group: custom.css gives
+    # each of them half of the width (3 of 6 grid columns).
+    - Tdarr:
+        icon: tdarr.svg
+        href: https://tdarr.homelab.example
+        description: Transcode server (ARCADE)
+        siteMonitor: http://192.0.2.10:8265
+        widget:
+          type: tdarr
+          url: http://192.0.2.10:8265
+          # The widget sends POST <url>/api/v2/cruddb with the header
+          # x-api-key and reads the statistics (counters only). Tdarr has
+          # auth on, and its keys have full rights: read README.md, "Widgets".
+          # The key crosses the home LAN in plain HTTP: Tdarr listens on the
+          # LAN IP of ARCADE only, not on its Tailscale IP.
+          key: "{{HOMEPAGE_VAR_TDARR_KEY}}"
+
+    # The node has no port to check: it runs in the network namespace of the
+    # server (network_mode: service:tdarr) and calls the server on 8266.
+    # There is no widget for it on purpose. Its state is only in
+    # /api/v2/get-nodes, and that answer holds the API key of the node
+    # (config.apiKey). The widget "customapi" sends the whole answer to the
+    # browser, so the key would be visible to every viewer.
+    - Tdarr Node:
+        icon: mdi-expansion-card-#c7d2fe
+        href: https://tdarr.homelab.example
+        description: Transcode node, NVENC on the GPU (ARCADE)
+
+- Media:
+    - Tautulli:
+        icon: tautulli.svg
+        href: https://tautulli.homelab.example
+        description: Plex statistics (the-grid)
+        siteMonitor: http://198.51.100.20:8181
+    - Plex:
+        icon: plex.svg
+        href: https://app.plex.tv/desktop
+        description: Media server (ARCADE, bare metal)
+        siteMonitor: http://192.0.2.10:32400/identity
+    - Immich:
+        icon: immich.svg
+        href: https://immich.homelab.example
+        description: Photos (ARCADE)
+        siteMonitor: http://192.0.2.10:2283
+    - Radarr:
+        icon: radarr.svg
+        href: https://radarr.homelab.example
+        description: Movies (ARCADE, bare metal)
+        siteMonitor: http://192.0.2.10:7878
+    - Sonarr:
+        icon: sonarr.svg
+        href: https://sonarr.homelab.example
+        description: Series (ARCADE, bare metal)
+        siteMonitor: http://192.0.2.10:8989
+    - Prowlarr:
+        icon: prowlarr.svg
+        href: https://prowlarr.homelab.example
+        description: Indexers (ARCADE)
+        siteMonitor: http://192.0.2.10:9696
+    - qBittorrent:
+        icon: qbittorrent.svg
+        href: https://qbit.homelab.example
+        description: Downloads (ARCADE)
+        siteMonitor: http://192.0.2.10:8082
+    - Cleanuparr:
+        icon: cleanuparr.png
+        href: https://cleanuparr.homelab.example
+        description: Queue cleanup (ARCADE)
+        siteMonitor: http://192.0.2.10:11011
+
+- Tools:
+    - Paperless:
+        icon: paperless-ngx.svg
+        href: https://paperless.homelab.example
+        description: Documents (the-grid)
+        siteMonitor: http://198.51.100.20:8010
+    - Bitwarden:
+        icon: bitwarden.svg
+        href: https://vault.homelab.example
+        description: Vault (the-grid)
+        siteMonitor: http://192.0.2.20:8080/alive
+    - Yamtrack:
+        icon: yamtrack-light.svg
+        href: https://yamtrack.homelab.example
+        description: Media tracker (the-grid)
+        siteMonitor: http://198.51.100.20:8000
+    - Spoolman:
+        icon: spoolman.svg
+        href: https://spoolman.homelab.example
+        description: 3D printer filament (the-grid)
+        siteMonitor: http://198.51.100.20:7912

@@ -1,0 +1,39 @@
+# =============================================================================
+#  Stack: SPOOLMAN  --  the-grid (GMKtec NucBox G11)
+#  Phase 4, service 2/5. Real state: SQLite + backup + cache + log, ~3.5 MB,
+#  bind mount (not a named volume) -- see PIANO-MIGRAZIONE-STACK-the-grid.md §2.1.
+#  Source stopped on ARCADE on 2026-08-27 before the copy. A SQLite file
+#  copied hot opens all the same and fails later.
+#
+#  The container runs as root (uid 0) both on the source and here --
+#  checked with `docker exec spoolman id`. the-grid has no userns-remap in
+#  daemon.json. So root in the container can write on the copied files
+#  no matter who created them on the host. No chown is necessary
+#  after the copy.
+# =============================================================================
+
+services:
+  spoolman:
+    image: ghcr.io/donkie/spoolman:latest
+    container_name: spoolman
+    restart: unless-stopped
+    labels:
+      # Without this, dvb-local copies the SQLite file hot during the backup.
+      # See nodes/the-grid/backup/README.md "When a new stack arrives".
+      - "docker-volume-backup.stop-during-backup=true"
+      # Managed by Komodo since 2026-09-24 (PIANO-KOMODO-SECRETS-GATE.md Phase 2):
+      # updates go through the gate + manual Deploy, not through Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - type: bind
+        source: /srv/docker/spoolman/data
+        target: /home/app/.local/share/spoolman
+    ports:
+      # No IP restriction: identical to the real behavior on
+      # ARCADE (bind on all the interfaces). Spoolman does not have the
+      # FlareSolverr problem (no auth + risk of abuse). It can also serve other LAN
+      # devices (slicer, OctoPrint), not only ARCADE. Review it if a reason to
+      # restrict it appears.
+      - "7912:8000"
+    environment:
+      - TZ=Europe/Rome

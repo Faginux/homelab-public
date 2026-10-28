@@ -1,0 +1,22 @@
+{{ define "title_success" -}}
+✅ 🖥️ ARCADE → 🖧 the-grid · 💾 Backup offsite
+{{- end }}
+
+{{ define "body_success" -}}
+📦 Dimensione: {{ .Stats.BackupFile.Size | formatBytesBin }}
+⌛ Durata: {{ .Stats.TookTime }}
+🛑 Container fermati: {{ .Stats.Containers.Stopped }}/{{ .Stats.Containers.All }}{{ if .Stats.Containers.StopErrors }} — ⚠️ {{ .Stats.Containers.StopErrors }} errori{{ end }}
+🗂 Archivi su the-grid: {{ .Stats.Storages.SSH.Total }}{{ if .Stats.Storages.SSH.Pruned }} ({{ .Stats.Storages.SSH.Pruned }} ruotati){{ end }}
+🕒 {{ .Stats.StartTime | formatTime }}
+{{- end }}
+
+{{ define "title_failure" -}}
+🔴 🖥️ ARCADE → 🖧 the-grid · 💾 Backup offsite
+{{- end }}
+
+{{ define "body_failure" -}}
+❌ {{ .Error }}
+
+🕒 {{ .Stats.StartTime | formatTime }}
+🔍 Dettagli: docker logs dvb-remote-the-grid
+{{- end }}

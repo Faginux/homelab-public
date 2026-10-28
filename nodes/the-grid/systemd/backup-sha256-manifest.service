@@ -1,0 +1,18 @@
+[Unit]
+Description=SHA-256 manifest next to the backup archives (for the pull from ARCADE)
+
+[Service]
+Type=oneshot
+# The folders in /srv/backup belong to ops and the archives are root:root 644.
+# To read them and to write the .sha256 files next to them, root is not necessary.
+User=ops
+ExecStart=/usr/local/bin/backup-sha256-manifest.sh
+# Hashing of a few hundred MB. It runs last in line for CPU and disk.
+Nice=10
+IOSchedulingClass=idle
+# It writes only in /srv/backup. It cannot write to the rest of the filesystem.
+ProtectSystem=strict
+ReadWritePaths=/srv/backup
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes

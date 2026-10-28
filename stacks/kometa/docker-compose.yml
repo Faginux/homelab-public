@@ -1,0 +1,39 @@
+# =============================================================================
+#  Stack: KOMETA  --  ARCADE
+#  Poster overlays + collections on the Plex library (bare metal on this host).
+#  Full context and decisions: KOMETA-CONFIG.md at the root of the repo.
+#
+#  A JOB, not a service: command --run does one full run and exits. Start it
+#  with `docker compose run --rm kometa` (by hand or from the nightly Scheduled
+#  Task), NEVER with `up -d`. restart "no" on purpose: with --run and a restart
+#  policy, the container would start again in a loop after each run, and hit Plex.
+#
+#  Image kometateam/kometa (NOT linuxserver/kometa: the official docs do not
+#  recommend it). Version: MAJOR 2 locked, minor/patch automatic (decided on
+#  2026-09-26). Kometa publishes no floating tags (v2, v2.5). Invoke-KometaRun.ps1
+#  selects the version in the nightly run (highest v2.x.y tag on Docker Hub,
+#  pull, automatic rollback if the first run fails). It gives the version here
+#  through KOMETA_TAG. Without the launcher (manual run) the default below applies:
+#  update it when you change the version by hand. Label watchtower=false: the
+#  launcher does the updates, not Watchtower (which does not see stopped containers).
+#
+#  No web UI -> no proxy network. It runs as root (the image declares no
+#  USER, checked on the registry): no UID/GID alignment on the Windows bind mount.
+#
+#  Secrets (Plex token, TMDb API key) ONLY in config.yml in KOMETA_CONFIG,
+#  outside the repo. They do not go through the environment, so
+#  `docker compose config` and `docker inspect` do not show them.
+# =============================================================================
+
+services:
+  kometa:
+    image: kometateam/kometa:${KOMETA_TAG:-v2.5.2}
+    container_name: kometa
+    command: ["--run"]
+    restart: "no"
+    environment:
+      - TZ=Europe/Rome
+    volumes:
+      - ${KOMETA_CONFIG}:/config:rw
+    labels:
+      - com.centurylinklabs.watchtower.enable=false

@@ -1,0 +1,14 @@
+[Unit]
+Description=Evening check of the drift between the compose files of the repo and the containers (21:00)
+
+[Timer]
+# At 21:00. In the evening, when the operator can act, and well before the
+# Watchtower run (06:00 of day 1) and the night backups. Away from the :30 of the
+# network check and the restart of flaresolverr (04:00).
+OnCalendar=*-*-* 21:00:00
+# If the-grid is off at 21:00, the check runs at the first good boot.
+Persistent=true
+Unit=docker-compose-drift-check.service
+
+[Install]
+WantedBy=timers.target

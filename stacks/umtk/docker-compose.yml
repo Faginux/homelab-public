@@ -1,0 +1,52 @@
+# =============================================================================
+#  Stack: UMTK (only the TSSK module)  --  ARCADE.
+#  Status badges on the series (next episode with date, finale soon, new
+#  season soon, last episode, ended, canceled). Context and decisions:
+#  KOMETA-CONFIG.md at the root of the repo, section 5.
+#
+#  A JOB, not a service: the same model as Kometa. It reads Sonarr, makes the
+#  YAML files of the overlays, writes them into the Kometa config and exits.
+#  ONLY Invoke-KometaRun.ps1 starts it (nightly run), before Kometa, in the
+#  same lock. NEVER `up -d`.
+#
+#  DOCKER=false on purpose: the image sets it to true. With true, UMTK.py goes
+#  into its internal scheduler (CRON) + web UI on 2120 and never exits.
+#  With false, it does one run (UMTK.py, branch "single run") and exits with 1
+#  if it fails. No published port: the web UI starts, but only on 127.0.0.1
+#  in the container, in a daemon thread that stops with the process.
+#
+#  Image: Docker Hub has only `latest` and `develop`, no version tag ->
+#  pin by digest (latest of 2026-09-19 = release v2026.09.19).
+#  Manual update: put the new digest here, after you read the release notes.
+#  Label watchtower=false for consistency (Watchtower does not see stopped containers).
+#
+#  Secrets (Sonarr API key) ONLY in config.yml in UMTK_CONFIG, outside the
+#  repo. The Plex token is not necessary: with edit_sort_titles=false TSSK does
+#  not write to Plex, and the categories ended/canceled are Kometa filters
+#  (tmdb_status). The process runs as UID 1000 (gosu from the entrypoint): on a
+#  Docker Desktop Windows bind mount the permissions do not apply, nothing to align.
+# =============================================================================
+
+services:
+  umtk:
+    image: netplexflix/umtk:latest@sha256:19670657fc495df7d63b0705162be151dcfd5b1f8ebd14e33e89d968225fd4b8
+    container_name: umtk
+    restart: "no"
+    environment:
+      - DOCKER=false
+      - TZ=Europe/Rome
+      - PUID=1000
+      - PGID=1000
+    extra_hosts:
+      # Sonarr (bare metal) refuses host.docker.internal: "HTTP 400 Invalid
+      # Hostname" on the Host header (checked on 2026-09-27). It accepts
+      # localhost, the host name and the LAN IP. Thus the host name points to
+      # the Docker Desktop gateway, and in config.yml the URL is arcade:8989.
+      - "arcade:host-gateway"
+    volumes:
+      # config.yml + tssk_config.yml + logs/ of UMTK
+      - ${UMTK_CONFIG}:/app/config:rw
+      # YAML output: directly into the Kometa config (config/tssk)
+      - ${UMTK_OUTPUT}:/app/kometa:rw
+    labels:
+      - com.centurylinklabs.watchtower.enable=false

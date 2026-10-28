@@ -1,0 +1,69 @@
+{
+  "roots": [
+    { "path": "nodes/the-grid", "host": "the-grid" },
+    { "path": "stacks", "host": "V4" },
+    { "path": "nodes/scope", "host": "scope" }
+  ],
+  "images": {
+    "serfriz/caddy-cloudflare-ddns-crowdsec": {
+      "track": "major",
+      "notes": "https://github.com/caddyserver/caddy/releases"
+    },
+    "crowdsecurity/crowdsec": {
+      "track": "major",
+      "notes": "https://github.com/crowdsecurity/crowdsec/releases"
+    },
+    "offen/docker-volume-backup": {
+      "track": "major",
+      "notes": "https://github.com/offen/docker-volume-backup/releases"
+    },
+    "moghtech/komodo-core": {
+      "track": "major",
+      "notes": "https://github.com/moghtech/komodo/releases"
+    },
+    "moghtech/komodo-periphery": {
+      "track": "major",
+      "notes": "https://github.com/moghtech/komodo/releases"
+    },
+    "mongo": {
+      "track": "minor",
+      "notes": "https://www.mongodb.com/docs/manual/release-notes/8.0/"
+    },
+    "bitwarden/lite": {
+      "track": "any",
+      "notes": "https://github.com/bitwarden/server/releases"
+    },
+    "mariadb": {
+      "track": "minor",
+      "notes": "https://mariadb.com/kb/en/release-notes-mariadb-10-11-series/"
+    },
+    "paperless-ngx/paperless-ngx": {
+      "track": "major",
+      "notes": "https://github.com/paperless-ngx/paperless-ngx/releases"
+    },
+    "apache/tika": {
+      "track": "major",
+      "notes": "https://tika.apache.org/"
+    },
+    "immich-app/immich-server": {
+      "track": "major",
+      "notes": "https://github.com/immich-app/immich/releases"
+    },
+    "immich-app/immich-machine-learning": {
+      "track": "major",
+      "notes": "https://github.com/immich-app/immich/releases"
+    },
+    "gethomepage/homepage": {
+      "track": "major",
+      "notes": "https://github.com/gethomepage/homepage/releases"
+    },
+    "nicolargo/glances": {
+      "track": "major",
+      "notes": "https://github.com/nicolargo/glances/releases"
+    },
+    "netplexflix/umtk": {
+      "track": "rebuild",
+      "notes": "https://github.com/netplexflix/umtk/releases"
+    }
+  }
+}

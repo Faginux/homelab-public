@@ -1,0 +1,16 @@
+[Unit]
+Description=SHA-256 manifest of the backup archives (03:40)
+
+[Timer]
+# At 03:40, 40 minutes after dvb-local (Tue and Fri 03:00, about 18 s). Away from
+# cron.hourly (:17), the network check (:30) and the restart of flaresolverr (04:00).
+# Daily, although dvb-local runs two times a week. If there is nothing new, it exits
+# in less than one second. It also covers the Bitwarden dumps (Part B) at any hour.
+# The pull of ARCADE runs at 05:40.
+OnCalendar=*-*-* 03:40:00
+# If the-grid is off at 03:40, the timer runs the manifest at the first good boot.
+Persistent=true
+Unit=backup-sha256-manifest.service
+
+[Install]
+WantedBy=timers.target

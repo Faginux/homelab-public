@@ -1,0 +1,161 @@
+# ==============================================================
+# TDARR - Transcode/health check of the Movies (Radarr) + TV (Sonarr) libraries
+# Hardware acceleration: NVENC on the RTX 3080Ti, in the Node container.
+#
+# Decisions and closed risks in PIANO-TDARR.md (2026-08-29 + update of
+# 2026-09-03). Summary of what is already checked, for a reader who does
+# not have the plan:
+#   - GPU passthrough: checked with `docker run --gpus=all
+#     nvidia/cuda:12.5.0-base-ubuntu22.04 nvidia-smi` (2026-09-03, OK).
+#   - auth=true is MANDATORY: the web UI will be public through Cloudflare
+#     (as immich/paperless), and Tdarr has no auth by default.
+#   - Current phase: LAN ONLY. Add the public Caddy route after you check
+#     login + API key in the LAN (plan, step 7). Not done yet.
+# ==============================================================
+
+name: tdarr
+
+services:
+
+  # ============================================================
+  # TDARR SERVER - Web UI, job queue, database of the processed files.
+  # No GPU here: the real transcode runs in the Node (below).
+  # ============================================================
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Rome
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - serverIP=0.0.0.0
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=false
+      - inContainer=true
+      - auth=true                        # mandatory, refer to PIANO-TDARR.md §4.3
+      # seededApiKey removed on 2026-10-14 (Phase 1, PIANO-KOMODO-SECRETS-GATE.md
+      # §2b.3 B): the key is already in configs/Tdarr_Server_Config.json, with the
+      # same value (checked on 2026-10-13). Rollback: put the line back.
+    ports:
+      # Bind on the LAN IP of ARCADE only (the same pattern as immich). Today
+      # it is only for access from the LAN. Later it also serves Caddy and a
+      # possible second external Node (for example on the-grid). That Node must talk
+      # to the server through the network, not through network_mode: service:.
+      - "192.0.2.10:8265:8265"   # web UI
+      - "192.0.2.10:8266:8266"   # server<->node traffic
+    volumes:
+      - ${TDARR_SERVER_DATA}/server:/app/server
+      - ${TDARR_SERVER_DATA}/configs:/app/configs
+      - ${TDARR_SERVER_DATA}/logs:/app/logs
+
+      # --- Movies (Radarr) ---
+      - A:/Media/radarr:/media/movies/a
+      - D:/Media/radarr:/media/movies/d
+      - H:/Media/radarr:/media/movies/h
+
+      # --- TV series (Sonarr) ---
+      - B:/Media/sonarr:/media/tv/b
+      - F:/Media/sonarr:/media/tv/f
+      - G:/Media/sonarr:/media/tv/g
+      - I:/Media/sonarr:/media/tv/i
+
+      # --- Staging: files in work. Tdarr removes the original source
+      # immediately after a successful transcode (no grace period, decision of
+      # 2026-08-29). NVMe 1TB, ~740GB free.
+      - S:/Tdarr/staging:/temp
+
+      # NOTES ON THE DISKS. Do not move them without a reason (refer to
+      # "Regola numero uno", rule number one).
+      # - D, G and I are EXTERNAL USB disks (checked with `Get-PhysicalDisk`,
+      #   2026-09-03). If one disconnects while Tdarr has a job on that path,
+      #   the Docker mount goes "stale". The web UI shows no clear error. Only
+      #   jobs fail or stop. Do not disconnect them during an active scan or
+      #   transcode.
+      # - G and H are Radarr/Sonarr roots since 2026-09-03. The operator added
+      #   them again. The import is complete, and the Radarr/Sonarr API shows
+      #   it (rootfolder.accessible=true, unmappedFolders=0 on both). Thus Tdarr
+      #   mounts them here.
+      # - E is the Google Drive virtual disk. It is not a media library. Never
+      #   mount it in Tdarr.
+    labels:
+      # Stack in Komodo (Phase 2): updates from the gate, not from Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================
+  # TDARR NODE - FFmpeg/HandBrake worker. The NVENC GPU work goes through here.
+  # network_mode: service:tdarr -> the same network namespace as the server,
+  # they talk on localhost. This works ONLY because they run on the same host
+  # (refer to PIANO-TDARR.md §3). A future external Node on the-grid must
+  # connect with serverURL + apiKey on a normal network.
+  # ============================================================
+  tdarr-node:
+    image: ghcr.io/haveagitgat/tdarr_node:latest
+    container_name: tdarr-node
+    restart: unless-stopped
+    network_mode: service:tdarr
+    depends_on:
+      - tdarr
+    environment:
+      - TZ=Europe/Rome
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - nodeName=oos4-gpu-node
+      - serverURL=http://127.0.0.1:8266
+      - inContainer=true
+      # apiKey removed on 2026-10-14: it is in configs/Tdarr_Node_Config.json.
+      - nodeType=mapped
+      # "2-3 transcodes in parallel" (decision of the operator). Set to 3 on
+      # 2026-09-13. First the operator set it in the UI on the running container
+      # (no restart). Then also here. So a future restart or recreate starts with
+      # the correct value and does not go back to 2.
+      - transcodegpuWorkers=3
+      # 0 = no silent fallback to the CPU: if NVENC fails, the job fails
+      # visibly. It does not transcode slowly with no message.
+      - transcodecpuWorkers=0
+      # Health Check (decided on 2026-09-16): before, it was 0/0, so the queue
+      # stopped with no error, also with "Process Health Checks" on in the
+      # library. Checked with ps aux in the container: it runs as
+      # "HandBrakeCLI --scan", CPU only (0% GPU-util in nvidia-smi), for all
+      # worker types. The 4 worker types are independent counters (checked in
+      # checkRunningWorkers.js), so the label "gpu" would not send work to the
+      # GPU. Thus it is on cpu, which shows what really occurs. No conflict
+      # with transcodecpuWorkers=0, because nothing else uses it.
+      - healthcheckgpuWorkers=0
+      - healthcheckcpuWorkers=1
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ${TDARR_SERVER_DATA}/configs:/app/configs
+      - ${TDARR_SERVER_DATA}/logs:/app/logs
+      # The same paths as the server, the SAME target in the container: the
+      # Tdarr database keeps the paths as Tdarr sees them. They must be equal
+      # 1:1 in the two containers, or Tdarr thinks that the files are gone.
+      - A:/Media/radarr:/media/movies/a
+      - D:/Media/radarr:/media/movies/d
+      - H:/Media/radarr:/media/movies/h
+      - B:/Media/sonarr:/media/tv/b
+      - F:/Media/sonarr:/media/tv/f
+      - G:/Media/sonarr:/media/tv/g
+      - I:/Media/sonarr:/media/tv/i
+      - S:/Tdarr/staging:/temp
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

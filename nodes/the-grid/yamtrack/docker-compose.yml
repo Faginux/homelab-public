@@ -1,0 +1,91 @@
+# =============================================================================
+#  Stack: YAMTRACK  --  the-grid (GMKtec NucBox G11)
+#  Phase 4, service 3/5. Two containers: yamtrack (11 MB db) + yamtrack-redis
+#  (3 MB cache). Source stopped on ARCADE before the copy.
+#
+#  Compared with production on ARCADE, TWO deliberate changes:
+#
+#  1) yamtrack-redis removed from the `proxy` network. On ARCADE it is the only
+#     datastore of the whole fleet on that network (known violation, see
+#     PIANO-MIGRAZIONE-STACK-the-grid.md §2.1 point 4 and CLAUDE.md). It is a redis
+#     with no auth that every exposed container can reach. Here there is no need
+#     to declare the network. `proxy` is a network of ARCADE. It does not exist
+#     on the-grid. yamtrack and yamtrack-redis share only the default project
+#     network, which is private.
+#
+#  2) Docker publishes port 8000 on TWO IPs. The first is the Tailscale IP of the-grid
+#     (198.51.100.20). It serves Caddy on ARCADE through
+#     `reverse_proxy 198.51.100.20:8000`. We checked on 2026-08-27 that a
+#     container on the `proxy` network of ARCADE reaches it with no problem.
+#     The second is the LAN IP (192.0.2.20). We added it on 2026-08-27 because
+#     the operator wants to reach the app directly from home without going through
+#     the tailnet. Yamtrack has its own login (SECRET/Django sessions). So the LAN
+#     exposure is not the "no auth" risk of FlareSolverr, which stays
+#     Tailscale-only.
+#
+#  Caddy dependency closed. Before Phase 8, Caddy on ARCADE did
+#  `reverse_proxy yamtrack:8000` by CONTAINER NAME on the `proxy` network.
+#  That name does not resolve when yamtrack runs on a different host. Since
+#  Phase 8 the Caddyfile on the-grid does `reverse_proxy 198.51.100.20:8000`
+#  for yamtrack.homelab.example.
+# =============================================================================
+
+services:
+  yamtrack:
+    container_name: yamtrack
+    image: ghcr.io/fuzzygrim/yamtrack
+    restart: unless-stopped
+    depends_on:
+      - yamtrack-redis
+    labels:
+      # Without this, dvb-local copies the SQLite file hot during the backup.
+      # See nodes/the-grid/backup/README.md "When a new stack arrives".
+      - "docker-volume-backup.stop-during-backup=true"
+      # Managed by Komodo since 2026-09-24 (PIANO-KOMODO-SECRETS-GATE.md Phase 2):
+      # updates go through the gate + manual Deploy, not through Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    environment:
+      - TZ=Europe/Rome
+      # SECRET and STEAM_API_KEY from a file (since 2026-09-23, PIANO-KOMODO-SECRETS-GATE.md
+      # Phase 1). `docker compose config` shows only the path. Three traps in
+      # config/settings.py (checked in the container).
+      #  - With no SECRET and no SECRET_FILE, Django SILENTLY uses a key
+      #    hardcoded in the code (public on GitHub). Do not remove SECRET_FILE.
+      #  - With an absolute path it reads `path.stem`. File names must have NO extension.
+      #  - RepositorySecret reads ALL the files in /run/secrets. They must
+      #    all be readable by UID 1000 (gunicorn/celery), or it crashes.
+      - SECRET_FILE=/run/secrets/yamtrack_secret
+      - REDIS_URL=redis://yamtrack-redis:6379
+      - URLS=https://yamtrack.homelab.example
+      - STEAM_API_KEY_FILE=/run/secrets/yamtrack_steam_api_key
+    secrets:
+      - yamtrack_secret
+      - yamtrack_steam_api_key
+    volumes:
+      - type: bind
+        source: /srv/docker/yamtrack/db
+        target: /yamtrack/db
+    ports:
+      - "198.51.100.20:8000:8000"
+      - "192.0.2.20:8000:8000"
+
+  yamtrack-redis:
+    container_name: yamtrack-redis
+    image: redis:8-alpine
+    restart: unless-stopped
+    labels:
+      # The redis too: the stack is in Komodo, all the updates go through the gate.
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - type: bind
+        source: /srv/docker/yamtrack/redis
+        target: /data
+
+# Files written by the operator on the host, with no final newline, outside the repo and inside
+# the encrypted backup of /srv/docker (backup/README.md). Without Swarm they are bind
+# mounts: owner ops = UID 1000 = gunicorn/celery, permissions 0400.
+secrets:
+  yamtrack_secret:
+    file: /srv/docker/_secrets/yamtrack/secret
+  yamtrack_steam_api_key:
+    file: /srv/docker/_secrets/yamtrack/steam_api_key

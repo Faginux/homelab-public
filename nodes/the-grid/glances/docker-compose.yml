@@ -1,0 +1,46 @@
+# =============================================================================
+#  Stack: GLANCES  --  the-grid (GMKtec NucBox G11)
+#  A small read-only API that gives the CPU, memory, disk, temperature and
+#  uptime of this host. Homepage on the scope reads it (conf/widgets.yaml,
+#  label the-grid). Homepage can read only its own host, so each other host needs
+#  its own Glances. ARCADE already has one (a Windows service).
+#
+#  Decisions:
+#   - Image pinned to 4.5.8-full by the digest of the multi-arch index (it
+#     contains linux/amd64). A tag can be published again, a digest cannot.
+#     Digest read from the registry on 2026-10-14.
+#   - Port on the Tailscale IP of the-grid only, never 0.0.0.0. Glances has no
+#     authentication here, and its API shows the host name, the system and
+#     the addresses. Docker must start after Tailscale: the unit
+#     tailscale-wait-online is already active on the-grid.
+#   - API only (--disable-webui). Refresh every 5 seconds. The plugins that
+#     Homepage does not use are off, so Glances uses little CPU. Homepage
+#     reads only cpu, mem, fs, sensors and uptime (checked in the code of
+#     Homepage v2.5.0).
+#   - No Docker socket, no `pid: host`, no `privileged`. CPU, memory and
+#     uptime come from /proc, and /proc shows the values of the host. The
+#     disk "/" is the overlay of the container, so it shows the size of the
+#     disk of the host. This is the same as the resources widget on the scope.
+#   - The container runs as root (uid 0), the default of the image. It has
+#     no volume, so no file permission can fail.
+# =============================================================================
+
+services:
+  glances:
+    image: nicolargo/glances:4.5.8-full@sha256:63823bf68687b42afab3bced830d1f157447c0204476cb7a62cb1e5e65dc292c
+    container_name: glances
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Rome
+      - GLANCES_OPT=-w --disable-webui -t 5 --disable-plugin containers,processlist,programlist,vms,connections,ports,wifi,smart,raid,irq,folders,amps,cloud,gpu
+    ports:
+      - "198.51.100.20:61208:61208"
+    labels:
+      # Komodo and the release check update this stack. Watchtower is off.
+      - "com.centurylinklabs.watchtower.enable=false"
+    mem_limit: 192m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

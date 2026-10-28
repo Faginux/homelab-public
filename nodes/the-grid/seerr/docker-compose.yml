@@ -1,0 +1,47 @@
+# =============================================================================
+#  Stack: SEERR  --  the-grid (GMKtec NucBox G11)
+#  Phase 4, service 4/5. The real Compose project on ARCADE has the name
+#  "overseerr" (S:\Bakcup_Servarr+\Docker yml\overseerr\), but the container and
+#  the image are "seerr" (ghcr.io/seerr-team/seerr). The name of the folder does
+#  not show it. Only `docker compose ls` + `docker inspect` show it (see also
+#  CLAUDE.md and PIANO-MIGRAZIONE-STACK-the-grid.md §2.1).
+#
+#  State: bind mount ~6.3 MB (db + settings.json). The latter contains the
+#  API keys of Plex/Radarr/Sonarr in plain text. Never read by Claude, copied
+#  with scp without opening it. Stop the source before the copy.
+#
+#  Port 5055 published on TWO IPs. One is Tailscale (198.51.100.20, for Caddy).
+#  The other is LAN (192.0.2.20). We added it on 2026-08-27 because the
+#  operator wants to reach the UI directly from home with no tailnet. On
+#  ARCADE it already ran on 0.0.0.0. That is acceptable there, because Seerr
+#  requires a login, unlike FlareSolverr. Here we return to an equivalent exposure.
+#
+#  Caddy dependency closed. Since Phase 8 the Caddyfile on the-grid does
+#  `reverse_proxy 198.51.100.20:5055` for seerr.homelab.example.
+# =============================================================================
+
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    restart: unless-stopped
+    labels:
+      # Without this, dvb-local copies the SQLite file hot during the backup.
+      # See nodes/the-grid/backup/README.md "When a new stack arrives".
+      - "docker-volume-backup.stop-during-backup=true"
+      # Young project (merge of Overseerr+Jellyseerr, Feb 2026): at least 3
+      # issues of 2026 about DB migrations that break the start. The backups limit
+      # the damage but not the hour of unattended downtime -- manual bumps.
+      - "com.centurylinklabs.watchtower.enable=false"
+    environment:
+      - LOG_LEVEL=info
+      - TZ=Europe/Rome
+      - PORT=5055
+    volumes:
+      - type: bind
+        source: /srv/docker/seerr/config
+        target: /app/config
+    ports:
+      - "198.51.100.20:5055:5055"
+      - "192.0.2.20:5055:5055"

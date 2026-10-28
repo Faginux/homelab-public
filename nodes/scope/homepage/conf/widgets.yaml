@@ -1,0 +1,76 @@
+---
+# Information widgets at the top of the page.
+# Reference: https://gethomepage.dev/widgets/info/
+#
+# The "resources" widget shows the numbers of the scope (the host that runs
+# Homepage), not of the container. Checked on 2026-10-14: the API of the
+# widget gives a total RAM of 3.98 GB, the same as `free` on the scope. The
+# upstream docs say the opposite, so read the numbers once more if the
+# image changes. Beszel shows the history of all the hosts.
+
+- search:
+    provider: google
+    target: _blank
+
+- resources:
+    label: scope
+    cpu: true
+    memory: true
+    disk: /
+    cputemp: true
+    uptime: true
+    units: metric
+
+# the-grid runs the container "glances" (nodes/the-grid/glances). The port is
+# open on the Tailscale IP of the-grid only. Inside the container "/" is not a
+# mount point: Docker mounts /etc/hosts from the root disk (the NVMe), so
+# that path gives the usage of the disk. "Tctl" is the CPU sensor.
+- glances:
+    url: http://198.51.100.20:61208
+    version: 4
+    label: the-grid
+    cpu: true
+    mem: true
+    disk: /etc/hosts
+    cputemp: true
+    uptime: true
+
+# ARCADE has a Glances service for Windows (NSSM). It listens on the
+# Tailscale IP only, on port 18208 (parameters "-B 198.51.100.10 -p 18208").
+# Not 61208: after the boot of 2026-10-17 Windows reserved 61195 to 61294,
+# Glances could not bind, and the block showed an API error. Ports below
+# 49152 are never in these ranges. Glances has no CPU temperature on
+# Windows. The service starts through tools/glances-lhm (a launcher that
+# reads Tctl from LibreHardwareMonitor), so "Tctl" is a sensor here too.
+# The disk is the system drive: Glances names it "C:\".
+- glances:
+    url: http://198.51.100.10:18208
+    version: 4
+    label: ARCADE
+    cpu: true
+    mem: true
+    disk: 'C:\'
+    cputemp: true
+    uptime: true
+
+# Date, time and weather share one bubble at the top right (custom.css).
+- datetime:
+    locale: it
+    format:
+      weekday: short
+      day: numeric
+      month: short
+      hour: 2-digit
+      minute: 2-digit
+
+# Open-Meteo needs no key. The scope sends these coordinates to
+# api.open-meteo.com. They are rounded to 2 decimals (about 1 km) on
+# purpose: the weather does not need the exact position of the house.
+- openmeteo:
+    latitude: 43.18
+    longitude: 13.60
+    timezone: Europe/Rome
+    units: metric
+    cache: 10
+    format:
+      maximumFractionDigits: 0

@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the sanity check of the containers a few minutes after the boot
+
+[Timer]
+OnBootSec=5min
+Unit=docker-boot-sanity-check.service
+
+[Install]
+WantedBy=timers.target

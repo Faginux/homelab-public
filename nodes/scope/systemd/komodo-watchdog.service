@@ -1,0 +1,43 @@
+[Unit]
+Description=Komodo watchdog: send a Telegram alert if a Komodo Server or the API does not respond
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/komodo-watchdog -expect the-grid,arcade
+# Throwaway systemd user, outside the docker group. On this host ops is
+# root in practice (docker group) and the watchdog does not need Docker.
+DynamicUser=yes
+# /var/lib/private/komodo-watchdog, path passed in $STATE_DIRECTORY.
+StateDirectory=komodo-watchdog
+# Root files 0400 in /etc/komodo-watchdog: systemd exposes them in
+# $CREDENTIALS_DIRECTORY, readable only by this service while it runs.
+LoadCredential=komodo_api_key:/etc/komodo-watchdog/komodo_api_key
+LoadCredential=komodo_api_secret:/etc/komodo-watchdog/komodo_api_secret
+LoadCredential=telegram_bot_token:/etc/komodo-watchdog/telegram_bot_token
+LoadCredential=telegram_chat_id:/etc/komodo-watchdog/telegram_chat_id
+# The watchdog needs only the network and its state folder.
+CapabilityBoundingSet=
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# @system-service includes setrlimit, which the Go runtime calls at start.
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+# A filtered syscall returns a readable error instead of killing the process.
+SystemCallErrorNumber=EPERM
+UMask=0077
+# The tool stops itself after 60 s. This is the safety net.
+TimeoutStartSec=90

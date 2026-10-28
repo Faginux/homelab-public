@@ -1,0 +1,63 @@
+# =============================================================================
+#  Stack: BESZEL-AGENT  --  the-grid (GMKtec NucBox G11)
+#  Phase 5.5. Agent for the Beszel hub that runs on the scope (beszel.homelab.example,
+#  Caddy -> 192.0.2.30:8090). ARCADE already has its own agent, as a
+#  native Windows service (NSSM), not containerized. Here we use the
+#  official Docker image instead, consistent with the rest of the the-grid stacks.
+#
+#  KEY and TOKEN come AS A PAIR for each system from the UI of the hub (Add
+#  System). They are not the same as ARCADE. A TOKEN reused by two different
+#  hosts is not a supported use case. Generate them again from zero for
+#  "the-grid" and write them ONLY in the real .env on the-grid. Never pass them to
+#  Claude (see the incident TOKEN ARCADE read by mistake from NSSM,
+#  2026-08-27). From then on, treat any command that inspects config/env
+#  as potentially sensitive until it proves harmless.
+#
+#  network_mode: host -- required by upstream for the metrics at host
+#  level (real CPU/RAM/network/disk of the machine, not of the namespace of the
+#  container). The ban of network_mode: host in CLAUDE.md is about
+#  Docker Desktop on Windows (limited support). Here we are on native Docker
+#  Engine on Debian, with no limitation. No port to
+#  publish: the agent connects OUTBOUND to HUB_URL (WebSocket),
+#  and the hub does not need to reach the-grid inbound.
+#
+#  docker.sock mounted read-only. It serves only to read the names/state
+#  of the containers for the per-container metrics in the dashboard. It gives no
+#  control over the containers. Watchtower is different: it mounts the socket
+#  read-write because it must be able to create the images again.
+# =============================================================================
+
+services:
+  beszel-agent:
+    image: henrygd/beszel-agent:latest
+    container_name: beszel-agent
+    restart: unless-stopped
+    network_mode: host
+    labels:
+      # Managed by Komodo since 2026-09-24 (PIANO-KOMODO-SECRETS-GATE.md Phase 2):
+      # updates go through the gate + manual Deploy, not through Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /srv/docker/beszel-agent/data:/var/lib/beszel-agent
+    environment:
+      - LISTEN=45876
+      # KEY is the PUBLIC key of the hub: it is not a secret, it stays interpolated.
+      - KEY=${BESZEL_KEY}
+      - HUB_URL=${BESZEL_HUB_URL}
+      # TOKEN from a file (since 2026-09-23, PIANO-KOMODO-SECRETS-GATE.md Phase 1).
+      # `docker compose config` shows only the path, never the value. The agent
+      # supports TOKEN_FILE natively (checked on 0.18.8). If the
+      # token does not work, the agent can fall back to SSH mode with KEY
+      # and still look alive from the hub. The proof is the line
+      # "WebSocket connected" in the log, not the green dot.
+      - TOKEN_FILE=/run/secrets/beszel_token
+    secrets:
+      - beszel_token
+
+# File written by the operator on the host, with no final newline, outside the repo and inside
+# the encrypted backup of /srv/docker (backup/README.md). Without Swarm the compose secrets are
+# bind mounts: the agent runs as root (UID 0), permissions 0400 are enough.
+secrets:
+  beszel_token:
+    file: /srv/docker/_secrets/beszel-agent/token

@@ -1,0 +1,94 @@
+# =============================================================================
+#  Stack: KOMODO (Core + MongoDB)  --  the-grid (GMKtec NucBox G11)
+#  Web UI / Docker orchestrator (moghtech/komodo, GPL-3.0). Installed on
+#  2026-09-23 NEXT TO DockHand, to try both and choose.
+#  Same discipline as DockHand (STATO-THE-GRID.md §5.13). The repo
+#  stays the source of truth. Komodo manages no real Stack until
+#  a test on flaresolverr shows what it writes in compose/.env.
+#
+#  Derived from the official compose file v2.3.3 (compose/mongo.compose.yaml), with
+#  these deliberate differences:
+#   - Periphery is NOT here. It runs as a systemd service on the host
+#     (komodo-periphery.service in this folder). In a container it would see
+#     only the mounted paths. It would resolve the relative binds of the stacks inside
+#     the container (upstream discussion #180, Trap 1 of CLAUDE.md).
+#   - No env_file. The file lists below each variable passed to Core, with
+#     ${VAR:?} that stops the start if the .env lacks it.
+#   - Bind mount on /srv/docker/komodo instead of named volumes. The backup
+#     (nodes/the-grid/backup) already covers all of /srv/docker.
+#   - PINNED images. Core 2.3.3 (latest release, 2026-09-01). Since v2,
+#     upstream does not publish :latest any more. Mongo 8.0.32 (latest of the
+#     8.0 series at 2026-09-23). The official compose file uses "mongo" with no tag,
+#     today 8.3.x. Updates by hand. The label excludes Watchtower.
+#   - Port of Core only on loopback (for Periphery on the host) and Tailscale
+#     (for Caddy and the browser), never 0.0.0.0. MongoDB has no published ports.
+#
+#  the-grid has AVX2 (checked 2026-09-22): MongoDB >= 5 requires it.
+# =============================================================================
+
+services:
+  mongo:
+    image: mongo:8.0.34
+    container_name: komodo-mongo
+    restart: unless-stopped
+    # WiredTiger cache limited as in the official compose file: the DB of Komodo is
+    # small, and the-grid has 11 GiB for all the rest.
+    command: --quiet --wiredTigerCacheSizeGB 0.25
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DATABASE_USERNAME:?KOMODO_DATABASE_USERNAME mancante nel .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DATABASE_PASSWORD:?KOMODO_DATABASE_PASSWORD mancante nel .env}
+    # The entrypoint starts as root, runs chown on the data to the mongodb user and
+    # then lowers the privileges. So ops can create the host folders.
+    volumes:
+      - /srv/docker/komodo/mongo-data:/data/db
+      - /srv/docker/komodo/mongo-config:/data/configdb
+    labels:
+      # From the official compose file: it excludes the DB from "StopAllContainers" of Komodo.
+      - komodo.skip
+      - com.centurylinklabs.watchtower.enable=false
+      # A MongoDB copied hot is not consistent: stopped during the backup.
+      - docker-volume-backup.stop-during-backup=true
+
+  core:
+    image: ghcr.io/moghtech/komodo-core:2.3.3
+    container_name: komodo-core
+    restart: unless-stopped
+    # Required by v2 (release notes v2.0.0): it avoids zombie processes.
+    init: true
+    depends_on:
+      - mongo
+    ports:
+      - "127.0.0.1:9120:9120"
+      - "198.51.100.20:9120:9120"
+    environment:
+      KOMODO_DATABASE_ADDRESS: mongo:27017
+      KOMODO_DATABASE_USERNAME: ${KOMODO_DATABASE_USERNAME:?KOMODO_DATABASE_USERNAME mancante nel .env}
+      KOMODO_DATABASE_PASSWORD: ${KOMODO_DATABASE_PASSWORD:?KOMODO_DATABASE_PASSWORD mancante nel .env}
+      KOMODO_HOST: https://komodo.homelab.example
+      KOMODO_TITLE: Komodo the-grid
+      TZ: Europe/Rome
+      # Admin user created at the first start only. Registration stays closed from
+      # the start, no "sign up" button exposed, not even on the tailnet.
+      KOMODO_LOCAL_AUTH: "true"
+      KOMODO_INIT_ADMIN_USERNAME: ops
+      KOMODO_INIT_ADMIN_PASSWORD: ${KOMODO_INIT_ADMIN_PASSWORD:?KOMODO_INIT_ADMIN_PASSWORD mancante nel .env}
+      KOMODO_DISABLE_USER_REGISTRATION: "true"
+      # At the first start Komodo creates the procedures "Backup Core Database" and
+      # "Global Auto Update" (core.config.toml v2.3.3). No automatism
+      # that we did not create ourselves: dvb already does the backup of the DB.
+      KOMODO_DISABLE_INIT_RESOURCES: "true"
+      KOMODO_DISABLE_CONFIRM_DIALOG: "false"
+      KOMODO_JWT_SECRET: ${KOMODO_JWT_SECRET:?KOMODO_JWT_SECRET mancante nel .env}
+      KOMODO_JWT_TTL: 1-day
+      # Webhooks not used (no Git sync, as for DockHand): the secret still
+      # serves to reject calls that are not signed.
+      KOMODO_WEBHOOK_SECRET: ${KOMODO_WEBHOOK_SECRET:?KOMODO_WEBHOOK_SECRET mancante nel .env}
+      # No KOMODO_FIRST_SERVER_NAME: the the-grid server enters with an onboarding
+      # key created from the UI, used one time by Periphery.
+    volumes:
+      # Key pair of Core (authentication with Periphery, v2).
+      - /srv/docker/komodo/keys:/config/keys
+      - /srv/docker/komodo/backups:/backups
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+      - docker-volume-backup.stop-during-backup=true

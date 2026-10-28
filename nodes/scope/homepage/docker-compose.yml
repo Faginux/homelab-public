@@ -1,0 +1,56 @@
+# =============================================================================
+#  Stack: HOMEPAGE  --  scope
+#  Start page of the homelab (gethomepage/homepage, GPL-3.0): links to the
+#  services, status dots and the Komodo, Seerr and Tdarr widgets. It is not a monitor and it
+#  does not send alerts: Beszel, komodo-watchdog and the "Ops" bot do that.
+#
+#  Decisions (read README.md for the reasons):
+#   - Image pinned to v2.5.0 by the digest of the multi-arch index (it
+#     contains linux/arm64). A tag can be published again, a digest cannot.
+#     Digest read on 2026-10-14 (PIANO-HOMEPAGE.md, P3).
+#   - No Docker socket. Container state comes from the Komodo API.
+#   - Port on the Tailscale IP of the scope only, never 0.0.0.0. Docker must
+#     start after Tailscale: tailscale-wait-online in nodes/scope/systemd/
+#     (same fix as the-grid, PROBLEMI-E-SOLUZIONI.md, race at boot).
+#   - Homepage has NO authentication. The only protection is the Caddy
+#     route on the-grid with `remote_ip 100.64.0.0/10` (tailnet only).
+#   - Config from the repo clone, read-only, ABSOLUTE path (Trap 1 of
+#     CLAUDE.md). The directory is `conf/`, not `config/`: .gitignore
+#     ignores `nodes/*/*/config/`.
+#   - LOG_TARGETS=stdout: without it Homepage writes logs into
+#     /app/config/logs, which is read-only here.
+#   - Background photo: the folder `images/` of the clone is mounted read-only
+#     on /app/public/images (custom.css uses /images/background.jpg). Mount
+#     only this folder, never the whole /app/public. Next.js reads the folder
+#     once at the start, so a new or changed image needs a restart.
+# =============================================================================
+
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v2.5.0@sha256:57c4a0531937889c0b968b120fe9c2560bbe036b5c9e18c49a9e2479de9975d1
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "198.51.100.30:3000:3000"
+    volumes:
+      - /home/ops/homelab-min/nodes/scope/homepage/conf:/app/config:ro
+      - /home/ops/homelab-min/nodes/scope/homepage/images:/app/public/images:ro
+    environment:
+      # The entrypoint starts as root and then changes to this user
+      # (su-exec). The files of the clone belong to ops, so the entrypoint
+      # does not try a chown. Check the UID with `id ops` (P2).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Rome
+      LOG_TARGETS: stdout
+      # Host header through Caddy, plus the direct address for the first
+      # test before the Caddy route exists.
+      HOMEPAGE_ALLOWED_HOSTS: home.homelab.example,198.51.100.30:3000
+      HOMEPAGE_VAR_KOMODO_KEY: ${HOMEPAGE_VAR_KOMODO_KEY:?HOMEPAGE_VAR_KOMODO_KEY missing in .env}
+      HOMEPAGE_VAR_KOMODO_SECRET: ${HOMEPAGE_VAR_KOMODO_SECRET:?HOMEPAGE_VAR_KOMODO_SECRET missing in .env}
+      HOMEPAGE_VAR_SEERR_KEY: ${HOMEPAGE_VAR_SEERR_KEY:?HOMEPAGE_VAR_SEERR_KEY missing in .env}
+      HOMEPAGE_VAR_TDARR_KEY: ${HOMEPAGE_VAR_TDARR_KEY:?HOMEPAGE_VAR_TDARR_KEY missing in .env}
+    # The scope has about 4 GB of RAM and also runs the Beszel hub. This
+    # limit protects Beszel. Measure the real use after 24 hours (P9) and
+    # change the limit if necessary.
+    mem_limit: 384m

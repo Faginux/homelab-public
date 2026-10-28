@@ -1,0 +1,101 @@
+# =============================================================================
+#  Stack: BACKUP  --  the-grid (GMKtec NucBox G11)
+#  Twin of volume-backup on ARCADE, same image and same form.
+#
+#  dvb-local        -> local archive  /srv/backup/docker-volumes
+#                      Tuesday + Friday 03:00, retention 29 days
+#
+#  COPY OUTSIDE THE NODE: since 2026-10-02 ARCADE pulls it every morning at
+#  05:40 (read-only SFTP pull, checked with SHA-256), see
+#  tools/the-grid-backup-pull/README.md. We removed dvb-remote-scope (copy on the scope,
+#  Saturday 05:00). The Pi corrupted the writes because of undervoltage
+#  (PROBLEMI-E-SOLUZIONI.md §11.5, PIANO-DECLASSAMENTO-scope.md A.6).
+#
+#  PREFIX OF THE ARCHIVES: "the-grid-volumes-". It must stay different from
+#  "arcade-volumes-" of ARCADE. BACKUP_PRUNING_PREFIX is also the filter
+#  with which dvb decides WHAT to remove at the end of the retention. A shared
+#  prefix would let one node prune the archives of the other.
+#
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  #  1) LOCAL ARCHIVE
+  # ---------------------------------------------------------------------------
+  dvb-local:
+    # Pinned to v2.48.2 (it was :v2, the version really running today).
+    # For a "verified" backup service, "verified" counts more than "updated".
+    # Nobody finds an archive that is silently empty or truncated until the restore.
+    # 2026-10-14: v2.48.2 -> v2.49.1 (notes read: an SSH fix, dependencies, Go 1.27).
+    image: offen/docker-volume-backup:v2.49.1
+    container_name: dvb-local
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Rome
+      BACKUP_CRON_EXPRESSION: "0 3 * * 2,5"
+      BACKUP_FILENAME: "the-grid-volumes-%Y-%m-%dT%H-%M-%S.{{ .Extension }}"
+      BACKUP_PRUNING_PREFIX: "the-grid-volumes-"
+      BACKUP_RETENTION_DAYS: "29"
+      BACKUP_COMPRESSION: gz
+      # Stops the containers labeled docker-volume-backup.stop-during-backup=true
+      # for the duration of the archiving. It serves the SQLite files (Tautulli, Seerr).
+      # If you copy them while the process writes, you get a file that opens all
+      # the same and fails later.
+      BACKUP_STOP_DURING_BACKUP_LABEL: "true"
+      # The SQLite DB of CrowdSec (2026-10-06). dvb does not stop crowdsec, because it
+      # keeps protecting Caddy to the end. During the transactions crowdsec creates and
+      # removes crowdsec.db-journal. This is the same form as the failure of Tdarr
+      # (PROBLEMI-E-SOLUZIONI.md §13.3). A hot copy would be inconsistent anyway.
+      # CrowdSec generates decisions and alerts again. After a restore without this
+      # file, the operator must REGISTER the bouncer of Caddy again, by hand. The
+      # registration is in the DB. The key is in the .env of caddy.
+      # The command is `cscli bouncers add ... -k`.
+      # The prefix without $ also covers -journal/-wal/-shm.
+      BACKUP_EXCLUDE_REGEXP: '^/backup/srv-docker/caddy/crowdsec-data/crowdsec\.db'
+      # Asymmetric age encryption (since 2026-09-23). It is the PUBLIC key. It is not
+      # a secret, so it is here and not in the .env. the-grid encrypts but cannot
+      # decrypt. The private key is in Bitwarden, secure note "age — backup
+      # dvb the-grid", and since 2026-10-02 also in offline copies outside the vault
+      # (backup/README.md). Without it, nobody can read the archives -- also the local
+      # ones. Mutually exclusive with GPG_*/AGE_PASSPHRASE.
+      # See PIANO-KOMODO-SECRETS-GATE.md §1.0.
+      AGE_PUBLIC_KEYS: "age1khzlxt53uvcdfhyj0zka0w3k25ns9pnqlxyn2lnq6ktyrd4ln5usjfflfy"
+      # From a file (since 2026-09-23, PIANO-KOMODO-SECRETS-GATE.md Phase 1): the shoutrrr
+      # URL has the token of the Telegram bot. dvb supports _FILE on each
+      # variable but does NOT remove spaces. A final newline would end in the URL.
+      NOTIFICATION_URLS_FILE: /run/secrets/dvb_notification_urls
+      NOTIFICATION_LEVEL: error
+    secrets:
+      - dvb_notification_urls
+    volumes:
+      # socket: it serves to stop/restart the labeled containers during the
+      # backup. The :ro flag below limits only the write on the FILE of the
+      # socket, not the API calls that pass over it. Whoever accesses it can
+      # do all that the daemon allows. The code of dvb, not this flag, makes it
+      # limit itself to stop/start (RETI-DOCKER.md §5).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # destination
+      - type: bind
+        source: /srv/backup/docker-volumes
+        target: /archive
+      # sources (read only)
+      - type: bind
+        source: /srv/docker
+        target: /backup/srv-docker
+        read_only: true
+
+# =============================================================================
+#  SOURCES TO ADD WITH PHASE 4
+#  Each stack that arrives brings its data under /srv/docker/<stack>/. The bind
+#  above therefore covers it automatically. NAMED VOLUMES are not covered.
+#  Add them explicitly to dvb-local, with `external: true` at the end.
+#  Otherwise Compose creates new ones with the project prefix and you get
+#  archives of 0 bytes without noticing.
+# =============================================================================
+
+# Written by the operator on the host, with no final newline, inside the encrypted backup of
+# /srv/docker. dvb runs as root (UID 0): permissions 0400 of ops are enough.
+secrets:
+  dvb_notification_urls:
+    file: /srv/docker/_secrets/backup/notification_urls

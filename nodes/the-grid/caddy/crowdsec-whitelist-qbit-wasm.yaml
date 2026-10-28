@@ -1,0 +1,35 @@
+# =============================================================================
+#  CrowdSec whitelist: WebAssembly modules of the qbit WebUI (qbtmud)
+#  Mounted by the compose file of this folder at
+#  /etc/crowdsec/parsers/s02-enrich/ops-qbit-wasm-whitelist.yaml
+#
+#  Why (2026-09-23): qbtmud is a Blazor WebAssembly app. With an empty browser
+#  cache it downloads about 64 /_framework/*.wasm files in a few seconds.
+#  crowdsecurity/http-logs treats as static only the extensions of a fixed list,
+#  and .wasm is not in it. Each module is a different "non static" path, and
+#  crowdsecurity/http-crawl-non_statics (capacity 40, leakspeed 0.5s)
+#  overflows. At 03:39 on 2026-09-23 it banned the home IP: 403 on all the
+#  routes with crowdsec (paperless, vault, immich...). PROBLEMI-E-SOLUZIONI.md
+#  §10.5.
+#
+#  It is narrow on purpose: only the qbit host, only GET/HEAD, only
+#  /_framework/*.wasm, only 200/304. A 404 on an invented .wasm (scanner) still
+#  counts. An event dropped here disappears from ALL the scenarios, not only from
+#  the crawl: this is why there is no ".wasm everywhere".
+#
+#  Fields: crowdsecurity/caddy-logs writes the evt.Meta.* in s01-parse, so they
+#  already exist here, whatever the order of the parsers in s02. http_path is the
+#  COMPLETE URI, query string included. [.] instead of \. so that the escapes do
+#  not need to be doubled between YAML and expr.
+#
+#  Changes: a single-file bind mount, so after a git pull run
+#  "docker compose up -d --force-recreate crowdsec". A restart is not enough
+#  (§10.4). Check: cscli explain --type caddy on a real log line.
+# =============================================================================
+name: ops/qbit-wasm-whitelist
+description: "qbtmud (Blazor): the /_framework/*.wasm modules are not a crawl"
+filter: "evt.Meta.service == 'http' && evt.Meta.log_type in ['http_access-log', 'http_error-log']"
+whitelist:
+  reason: "qbtmud Blazor WebAssembly bundle"
+  expression:
+    - "evt.Meta.target_fqdn == 'qbit.homelab.example' && evt.Meta.http_verb in ['GET', 'HEAD'] && evt.Meta.http_status in ['200', '304'] && evt.Meta.http_path matches '^/_framework/[^/?]+[.]wasm([?].*)?$'"

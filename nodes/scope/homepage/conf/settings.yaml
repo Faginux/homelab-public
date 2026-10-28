@@ -1,0 +1,40 @@
+---
+# Homepage settings. Reference: https://gethomepage.dev/configs/settings/
+# This directory is mounted read-only. Homepage reads the files again when
+# the page loads, so a change needs a `git pull` on the scope only. No restart
+# of the container (checked on 2026-10-14, see PIANO-HOMEPAGE.md, P8).
+#
+# The look is "dark glass": the gradient background, the blur of the cards
+# and the colors are in custom.css. Do not use cardBlur or background here:
+# custom.css does the same work, and the two would fight each other.
+
+title: Homelab
+description: Services, apps and monitoring of the homelab
+language: it
+theme: dark
+color: slate
+headerStyle: boxed
+statusStyle: dot
+target: _blank
+useEqualHeights: true
+hideVersion: true
+
+# The order of the groups is the order of this list. "Admin" is the
+# bookmark group.
+layout:
+  # Monitoring has 6 grid columns. The first row has 3 cards (2 columns
+  # each) and the second row has 2 cards (3 columns each): both rows fill
+  # the same width. custom.css sets the spans.
+  Monitoring:
+    style: row
+    columns: 6
+  # 8 cards in 4 columns: two full rows.
+  Media:
+    style: row
+    columns: 4
+  Tools:
+    style: row
+    columns: 4
+  Admin:
+    style: row
+    columns: 3

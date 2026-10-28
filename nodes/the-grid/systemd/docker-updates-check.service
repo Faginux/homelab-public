@@ -1,0 +1,10 @@
+[Unit]
+Description=Send a Telegram alert if the Docker repository has updates for the installed packages
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# It reads only the apt cache and /srv/docker/_secrets/telegram. It does not need root.
+User=ops
+ExecStart=/usr/local/bin/docker-updates-check.sh

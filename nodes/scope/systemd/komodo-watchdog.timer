@@ -1,0 +1,14 @@
+[Unit]
+Description=Komodo watchdog every 5 minutes
+
+[Timer]
+# Minutes 01, 06, ..., 56: away from :00 of the Sunday jobs (03:00, 04:00, 20:00)
+# and from :17 of cron.hourly. The round is one HTTP call, but the staggering
+# still applies (rule of the CLAUDE.md).
+OnCalendar=*:01/5
+# The default (1 min) would shift the checks too much from the 5-minute step.
+AccuracySec=5s
+Unit=komodo-watchdog.service
+
+[Install]
+WantedBy=timers.target

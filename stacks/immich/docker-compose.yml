@@ -1,0 +1,207 @@
+# ==============================================================
+# IMMICH - self-hosted Google Photos on ARCADE
+# Photo library: B:\immich-library (Exos18, 13TB free)
+# Published: immich.homelab.example (Caddy on the-grid, through the published LAN IP)
+#
+# Adapted from the original compose in
+# S:\Bakcup_Servarr+\Docker yml\immich\docker-compose.yml
+# (v2.7.5, with historic notes on the migration pgvecto.rs -> VectorChord).
+# ==============================================================
+
+# Explicit project name. Before, Compose took it from the folder name
+# ("immich"), so the volumes are already immich_immich-pgdata and
+# immich_immich-model-cache. With the name set here, a move or rename of the
+# folder cannot make the database "disappear".
+name: immich
+
+services:
+
+  # ============================================================
+  # IMMICH SERVER - Backend + Web UI
+  # On the network immich, to talk to Redis and Postgres.
+  # Caddy on the-grid reaches it through the published LAN IP (the two hosts
+  # have different Docker networks). Since Phase 8 the local "proxy" network
+  # does not serve this. The network left on 2026-09-12.
+  # The deploy/nvidia block is NOT for the ML. It is for the NVENC video
+  # transcode, which runs in this container (ffmpeg).
+  # ============================================================
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:v3.3.1
+    container_name: immich-server
+    restart: unless-stopped
+    # Phase 1 (2026-10-14, PIANO-KOMODO-SECRETS-GATE.md §2b.3 B): no
+    # env_file. With env_file, `compose config` (and so the deployed_config of
+    # Komodo) would contain all the .env, with the password. The variables are
+    # the ones that the container got from the .env. DB_PASSWORD is not there
+    # (now a file). The variables that only compose uses are not there either
+    # (COMPOSE_PROJECT_NAME, IMMICH_LIBRARY). Since 2026-10-26 the version is in
+    # the `image:` lines (v3.3.1), not in IMMICH_VERSION. The release-check job
+    # reads the pins from the compose (PIANO-RELEASE-CHECK.md, R2-a).
+    environment:
+      TZ: ${TZ}
+      DB_HOSTNAME: ${DB_HOSTNAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_DATABASE_NAME: ${DB_DATABASE_NAME}
+      # start.sh reads *_FILE (checked on 3.0.3 and 3.3.1).
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      REDIS_HOSTNAME: ${REDIS_HOSTNAME}
+      IMMICH_MACHINE_LEARNING_URL: ${IMMICH_MACHINE_LEARNING_URL}
+    volumes:
+      # Database password: a file that the operator wrote, outside the repo, in
+      # the encrypted backup of S:/docker-appdata. A bind, not `secrets: file:`
+      # (the bind S:/... from Periphery is already tested, test A of 2026-10-02).
+      - S:/docker-appdata/_secrets/immich/db_password:/run/secrets/db_password:ro
+      # Photo library - disk B, its own folder.
+      # /usr/src/app/upload is the "legacy" path: v3 still finds it
+      # (storage.service.ts tries /data, then /usr/src/app/upload).
+      # Do NOT change it to /data without a migration. If you do,
+      # Immich thinks that the library is gone.
+      - ${IMMICH_LIBRARY}:/usr/src/app/upload
+    depends_on:
+      - redis
+      - database
+    networks:
+      - immich  # for Redis and Postgres
+    labels:
+      # Stack in Komodo (Phase 2): updates from the gate, not from Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    ports:
+      # Bind on the LAN IP of ARCADE only, not on all interfaces.
+      # Caddy on the-grid is the reverse proxy to here by IP (a different host:
+      # it cannot resolve "immich-server" by container name).
+      - "192.0.2.10:2283:2283"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ============================================================
+  # IMMICH MACHINE LEARNING - Face detection + CLIP + Smart search
+  # CUDA GPU on: tag -cuda + nvidia reservation + DEVICE_TYPE.
+  # Only on the internal network - Caddy never touches it
+  # Model cache in a named volume (~1GB, downloaded at the first start)
+  # ============================================================
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:v3.3.1-cuda
+    container_name: immich-machine-learning
+    restart: unless-stopped
+    # Phase 1: from the .env, the ML used only TZ.
+    environment:
+      TZ: ${TZ}
+      MACHINE_LEARNING_DEVICE_TYPE: cuda
+    volumes:
+      - immich-model-cache:/cache
+    networks:
+      - immich
+    labels:
+      # Stack in Komodo (Phase 2): updates from the gate, not from Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ============================================================
+  # REDIS - Cache and job queue for Immich
+  # Internal network only, no published port
+  #
+  # NOTE: the official v3 compose uses docker.io/valkey/valkey:9.
+  # redis:6.2-alpine still works (no volume, it is only a cache
+  # + job queue). Change postponed: one migration at a time.
+  # ============================================================
+  redis:
+    image: docker.io/redis:6.2-alpine
+    container_name: immich-redis
+    restart: unless-stopped
+    networks:
+      - immich
+    labels:
+      # Stack in Komodo (Phase 2): updates from the gate, not from Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================
+  # POSTGRES + VECTORCHORD - Database with vector search
+  #
+  # Official Immich image. The parts of the tag:
+  #   16              -> PostgreSQL 16. It was already pg16, do NOT change it.
+  #                      The data directory is not compatible between majors.
+  #   vectorchord0.4.3 -> new extension (v3 accepts >=0.3 <2).
+  #   pgvectors0.2.0   -> pgvecto.rs is STILL there. Immich needs it
+  #                      to convert the existing columns
+  #                      vectors.vector(512) -> vector(512).
+  #                      Without it: "could not access file
+  #                      $libdir/vectors: No such file or directory".
+  #
+  # The newer images (vectorchord1.1.1) do NOT have pgvectors:
+  # a change to them BEFORE the migration breaks everything.
+  # Internal network only, no published port
+  # ============================================================
+  database:
+    image: ghcr.io/immich-app/postgres:16-vectorchord0.4.3-pgvectors0.2.0
+    container_name: immich-postgres
+    restart: unless-stopped
+    environment:
+      # Only initdb reads it. The container ignores it when the database already
+      # exists. It comes from a file, for the day when you make the volume again
+      # (Phase 1, 2026-10-14).
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      # --data-checksums: finds data corruption on the disk
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      # The volume immich-pgdata is in the Docker Desktop VHDX
+      # (system SSD), so this stays commented out.
+      # Remove the comment ONLY if the database moves to an HDD.
+      # DB_STORAGE_TYPE: 'HDD'
+    # Shared memory for Postgres. The official image already contains
+    # the tuning, the healthcheck and shared_preload_libraries: for this
+    # reason there is no "command:" block below.
+    shm_size: 128mb
+    volumes:
+      - immich-pgdata:/var/lib/postgresql/data
+      - S:/docker-appdata/_secrets/immich/db_password:/run/secrets/db_password:ro
+    networks:
+      - immich
+    labels:
+      # Stack in Komodo (Phase 2): updates from the gate, not from Watchtower.
+      - "com.centurylinklabs.watchtower.enable=false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # ML model cache (~1GB, downloaded one time). An existing named
+  # volume (immich_immich-model-cache): do NOT change it to a bind
+  # mount. The pinned project name above protects it.
+  immich-model-cache:
+  # PostgreSQL database with metadata + AI embeddings. An existing
+  # named volume (immich_immich-pgdata): the same applies.
+  immich-pgdata:
+
+networks:
+  # Internal network for the traffic between the Immich containers
+  immich:
+    name: immich

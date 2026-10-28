@@ -1,0 +1,121 @@
+# ════════════════════════════════════════════════════════════
+#  SECRETS & ENV  —  the golden rule
+# ════════════════════════════════════════════════════════════
+.env
+*.env
+**/.env
+
+#  `*.env` matches only the files that END in .env.
+#  The editor derivatives escape it. Examples: .env.bak-<date>, .env.old and .env.save.
+#  `git add -A` takes them.
+#  They must stay BEFORE the negations. If they come after, git ignores .env.example again.
+.env.*
+**/.env.*
+*.env.bak*
+
+!.env.example
+!*.env.example
+!**/.env.example
+
+secrets/
+*.secret
+*.key
+*.pem
+*.crt
+*.p12
+!*.example.key
+
+# ════════════════════════════════════════════════════════════
+#  APPLICATION STATE / BIND MOUNTS  (never version the data)
+#  -> Caddy certs, Immich/Paperless DB, redis dumps, photo uploads...
+#
+#  ⚠️ WARNING ABOUT SCOPE. A rule like `**/media/` looks harmless.
+#     But it also matches `stacks/media/`. Then the STACK disappears from git, in silence.
+#     Same problem with config/, data/, db/.
+#     So the rules about data start at `stacks/*/`.
+#     They hit a data folder INSIDE a stack, never the folder of the stack itself.
+#     The real data stay outside the repo anyway (${APPDATA_ROOT}).
+#     These rules are a safety net for when you make a mistake and use a relative path.
+# ════════════════════════════════════════════════════════════
+stacks/*/appdata/
+stacks/*/config/
+stacks/*/data/
+stacks/*/db/
+stacks/*/redis/
+stacks/*/upload/
+stacks/*/media/
+stacks/*/postgres/
+stacks/*/pgdata/
+
+#  The same safety net for the per-host stacks. The rules above start at
+#  `stacks/*/`. They did NOT cover `nodes/<host>/<stack>/`.
+#  A compose file of the-grid with a relative path like ./data could go straight into git.
+nodes/*/*/appdata/
+nodes/*/*/config/
+nodes/*/*/data/
+nodes/*/*/db/
+nodes/*/*/redis/
+nodes/*/*/upload/
+nodes/*/*/media/
+nodes/*/*/postgres/
+nodes/*/*/pgdata/
+
+# Data folder at the root of the repo (it should never exist, but for safety)
+/appdata/
+/data/
+/db/
+
+# Local databases + redis dumps (at any depth)
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.rdb
+dump.rdb
+
+# ════════════════════════════════════════════════════════════
+#  BUILD ARTIFACTS (too large for git — GitHub hard limit 100MB)
+#  -> ISO images, VHD/VHDX. Scripts and config stay versioned.
+# ════════════════════════════════════════════════════════════
+*.iso
+*.vhd
+*.vhdx
+
+# Python bytecode — never useful in version control, generated again at each run
+__pycache__/
+*.pyc
+
+# bitwarden-sync (nodes/the-grid/): session data of the bw CLI and runtime lock
+# files, not config. Use the exact path. A pattern like `profiles/` could match
+# something else elsewhere in the repo (the same caution about scope as in the
+# section above).
+nodes/the-grid/bitwarden-sync/profiles/
+nodes/the-grid/bitwarden-sync/.lock
+
+# ════════════════════════════════════════════════════════════
+#  CLAUDE CODE
+#  .claude/settings.json  -> VERSIONED (the deny rules are the fence)
+#  .claude/settings.local.json -> local, can have personal allow rules
+# ════════════════════════════════════════════════════════════
+.claude/settings.local.json
+.claude/worktrees/
+
+# ════════════════════════════════════════════════════════════
+#  LOGS / OVERRIDES / SYSTEM (Windows)
+# ════════════════════════════════════════════════════════════
+*.log
+logs/
+**/logs/
+docker-compose.override.yml
+**/docker-compose.override.yml
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.vscode/
+.idea/
+*.swp
+*~
+# backup that draw.io Desktop writes at each save (.$<file>.drawio.bkp)
+.$*.bkp

@@ -1,0 +1,22 @@
+NOTICE
+
+The code and the documents that the owner of this repo wrote are under the MIT licence (LICENSE).
+The material in this list belongs to other owners. The MIT licence does not cover it.
+
+1. The icons in docs/map/icons/
+   The logos and the product icons are trademarks of their owners. This repo is not connected
+   to these owners. The icons come from the sources below, at the commit that docs/map/icons/icons.psd1
+   pins. The licence of each source is the licence of its files, and it does not give any right on a logo.
+
+   - https://github.com/homarr-labs/dashboard-icons, commit 320c819da84048d5a3066e2578bfa83be9019fdf
+     Licence note: Apache-2.0 for the repository. Each icon belongs to its brand owner.
+   - https://github.com/loganmarchione/homelab-svg-assets, commit 73d44d7615cfca73ae909e8631235cdf18e8f043
+     Licence note: MIT for the code of the repository. Each icon belongs to its brand owner (DISCLAIMER.md).
+
+2. The wallpaper nodes/scope/homepage/images/background.jpg
+   The picture comes from a public wallpaper site. The licence of the picture is not known.
+   The MIT licence does not cover it. If you own the picture and you want it removed, open an issue.
+
+3. Product names
+   Docker, Plex, Radarr, Sonarr, Caddy, CrowdSec, Tailscale, Raspberry Pi, Debian, Windows and the other
+   names of products in this repo are trademarks of their owners. This repo is not connected to them.

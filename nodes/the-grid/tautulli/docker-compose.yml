@@ -1,0 +1,48 @@
+# =============================================================================
+#  Stack: TAUTULLI  --  the-grid (GMKtec NucBox G11)
+#  Phase 4, service 5/5 -- LAST, Plex history that cannot be recovered (~178 MB).
+#
+#  The internal process runs as UID 1000 (checked: PID 1 inside the
+#  container has Uid: 1000). `docker exec ... id` shows root, but that is the
+#  default user of the entrypoint, not of the real Tautulli
+#  process. ops on the-grid is ALSO UID 1000. So no chown is necessary
+#  after the copy. The files arrive already with the right owner.
+#
+#  config.ini contains `pms_ip = 192.0.2.10` (the real LAN IP of
+#  ARCADE, checked -- NOT host.docker.internal). the-grid is on the same
+#  LAN (192.0.2.20). Do NOT change this field. Plex stays
+#  reachable as it is. config.ini also contains `pms_token` in plain
+#  text. Never read it. Copy the file only with scp.
+#
+#  Managed by Komodo since 2026-09-24 (PIANO-KOMODO-SECRETS-GATE.md Phase 2):
+#  excluded from Watchtower, updates go through the gate + manual Deploy.
+# =============================================================================
+
+services:
+  tautulli:
+    image: ghcr.io/tautulli/tautulli:latest
+    container_name: tautulli
+    restart: unless-stopped
+    labels:
+      # Without this, dvb-local copies the SQLite file hot during the backup.
+      # See nodes/the-grid/backup/README.md "When a new stack arrives".
+      - "docker-volume-backup.stop-during-backup=true"
+      # Watchtower creates the container again by cloning the labels, including
+      # com.docker.compose.image. On 24/09 the first Deploy from Komodo created this
+      # container again for that stale label (STATO-THE-GRID.md §5.18).
+      - "com.centurylinklabs.watchtower.enable=false"
+    environment:
+      - TZ=Europe/Rome
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - type: bind
+        source: /srv/docker/tautulli/config
+        target: /config
+    ports:
+      # Two IPs. The first is Tailscale (198.51.100.20) for Caddy: tautulli.homelab.example,
+      # public through Cloudflare like yamtrack, CrowdSec section of the Caddyfile.
+      # The second is LAN (192.0.2.20). We added it on 2026-08-27 because the
+      # operator wants to reach the UI directly from home without going through the tailnet.
+      - "198.51.100.20:8181:8181"
+      - "192.0.2.20:8181:8181"

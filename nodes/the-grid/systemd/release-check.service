@@ -1,0 +1,21 @@
+[Unit]
+Description=Release check: compare the pinned images in the compose files with the registries, write to Telegram on a change (never pull, never deploy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# ops owns the clone of the repo and the secrets in /srv/docker/_secrets.
+# The tool needs no root and no Docker group.
+User=ops
+# Creates /var/lib/release-check, owned by User=, and passes the path in
+# $STATE_DIRECTORY. There the tool keeps the last notified result.
+StateDirectory=release-check
+WorkingDirectory=/home/ops/github/homelab
+ExecStart=/usr/local/bin/release-check -repo /home/ops/github/homelab
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+# The tool stops itself after 10 minutes. This is the safety net.
+TimeoutStartSec=15min

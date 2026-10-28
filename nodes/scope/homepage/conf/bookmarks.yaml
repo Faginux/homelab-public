@@ -1,0 +1,15 @@
+---
+# Bookmarks. Reference: https://gethomepage.dev/configs/bookmarks/
+# The icons come from the dashboard-icons collection. A dark icon is not
+# readable on the dark background: use the "-light" variant if there is one.
+
+- Admin:
+    - GitHub homelab:
+        - icon: github-light.svg
+          href: https://github.com/Faginux/homelab-public
+    - Tailscale:
+        - icon: tailscale-light.svg
+          href: https://login.tailscale.com/admin/machines
+    - Cloudflare:
+        - icon: cloudflare.svg
+          href: https://dash.cloudflare.com/

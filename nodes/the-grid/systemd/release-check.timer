@@ -1,0 +1,14 @@
+[Unit]
+Description=Release check every morning at 08:05, after the CVE gate (07:45)
+
+[Timer]
+# The CVE gate runs at 07:45 and takes from 21 s to about 2 min. 08:05 is away from
+# :17 (cron.hourly) and :30 (docker-network-check). The job talks only to external
+# registries, so it does not touch the services of the homelab.
+OnCalendar=*-*-* 08:05:00
+# If the-grid is off at 08:05, the job runs at the first good boot.
+Persistent=true
+Unit=release-check.service
+
+[Install]
+WantedBy=timers.target

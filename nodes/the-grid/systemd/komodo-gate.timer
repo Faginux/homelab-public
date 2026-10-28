@@ -1,0 +1,14 @@
+[Unit]
+Description=CVE gate every morning at 07:45, after the Komodo poll (07:00)
+
+[Timer]
+# 45 minutes after the Komodo Procedure "Poll updates (mai deploy)" (07:00). The
+# Procedure writes the candidate digests that the gate reads. Away from the :30 of
+# the network check.
+OnCalendar=*-*-* 07:45:00
+# If the-grid is off at 07:45, the gate runs at the first good boot.
+Persistent=true
+Unit=komodo-gate.service
+
+[Install]
+WantedBy=timers.target

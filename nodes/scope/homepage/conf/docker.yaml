@@ -1,0 +1,3 @@
+---
+# Docker integration is off on purpose. Homepage gets no Docker socket.
+# Komodo gives the container state (see services.yaml).

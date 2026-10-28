@@ -1,0 +1,196 @@
+# =============================================================================
+#  volume-backup  --  offen/docker-volume-backup
+#  ARCADE
+#
+#  dvb-local        -> local archive  S:\Bakcup_Servarr+\Docker Volumes
+#                      Monday + Thursday 02:15, retention 29 days (8 archives).
+#  dvb-remote-the-grid   -> offsite copy through SSH to the-grid/the-grid (192.0.2.20)
+#                      Sunday 06:00, retention 36 days (5 archives).
+#
+#  The sources are IDENTICAL in the two containers: each offsite copy already
+#  contains all the folder "Docker yml", so also all the compose files.
+#
+#  NOTE: the long syntax (type/source/target) is mandatory for Windows paths
+#  that contain spaces and the colon of the drive letter. The short form -v
+#  breaks the parser.
+#
+#  REMOVED (2026-07-26): the binds on S:/paperless/data and S:/paperless/media.
+#  Paperless moved to Docker yml/paperless and is already in the backup.
+#
+#  ADDED (2026-07-26): Telegram notification templates, one folder for each
+#  container (the templates refer to different storage: Local vs SSH).
+#
+#  REMOVED (2026-08-29): hermes-home and hermes-workspace. The hermes stack is
+#  gone (Tdarr replaced it), so the volumes do not exist any more.
+#
+#  REMOVED (2026-09-05): caddy_caddy_data/config, caddy_crowdsec_data/config,
+#  paperless_pgdata, paperless_redisdata. The containers caddy/crowdsec/paperless-*
+#  no longer run on ARCADE (some were still in removal). The live data is on
+#  the-grid now. It is already in nodes/the-grid/backup/ (bind on /srv/docker).
+#  The migration selected this bind on purpose for this reason. Refer to the
+#  comments in the the-grid compose files of paperless and caddy.
+#
+#  REMOVED (2026-09-13): bind S:/caddy -> /backup/caddy-conf on BOTH services.
+#  The cleanup of 2026-09-05 missed it. The folder S:/caddy was already gone from
+#  the host, so the bind had no source. dvb-remote-scope started to fail (ENOENT
+#  on /backup/caddy-conf) on 2026-09-13. dvb-local ran well on 2026-09-10 but had
+#  the same risk at the next run (2026-09-14). Probably Docker Desktop/WSL2 keeps
+#  the mount until you make the container again or restart the service.
+#
+#  MOVED (2026-09-13): the stack moved from
+#  "S:/Bakcup_Servarr+/Docker yml/volume-backup" to
+#  "S:/github/homelab/stacks/volume-backup" -- before, it was in no repo
+#  (the only ARCADE stack without version control). The Compose project
+#  name stays "volume-backup" (the same basename), so no recreate because of a
+#  name conflict. The paths to the notifications/SSH key below point here now.
+#  The data SOURCES (Docker yml, Docker Volumes, immich-library) stay on
+#  the original paths, with no change.
+#
+#  ADDED (2026-09-13): dvb-remote-the-grid, third offsite target (in addition to
+#  scope). It uses exactly the same pattern as dvb-remote-scope. It has its own
+#  restricted SSH key (restrict, made on the-grid, downloaded here). It has its own
+#  folder on the-grid (/srv/backup/from-arcade). This folder is separate from the
+#  native backup space of the-grid in /srv/backup/docker-volumes. At the same time, the
+#  Bitwarden backup of scope also got the-grid as a second target. Refer to
+#  nodes/scope/backup-bitwarden/backup-bitwarden.sh.
+#
+#  ADDED (2026-10-02): S:/docker-appdata -> /backup/docker-appdata on all
+#  three services. It holds the configs of the stacks moved into the repo
+#  (tdarr, qbit_manage, cleanuparr, kometa, umtk), which were in no backup
+#  before. ~2.6 GB, almost all "Original Posters" of Kometa. cleanuparr (SQLite)
+#  has the label stop-during-backup. tdarr does not (it would stop the
+#  transcodes): for tdarr, the consistent zips that it makes in
+#  server/Tdarr/Backups are the reference.
+#
+#  ENCRYPTION (2026-10-02): AGE_PUBLIC_KEYS on dvb-remote-scope and dvb-remote-the-grid.
+#  It is the same PUBLIC key as the the-grid backup (nodes/the-grid/backup).
+#  The offsite archives go out as arcade-volumes-<date>.tar.gz.age. scope and the-grid
+#  get them already encrypted and cannot decrypt them. The private key is only in
+#  Bitwarden, secure note "age — backup dvb the-grid". If you lose it, nobody can read
+#  the offsite copies. dvb-local stays in clear text ON PURPOSE. It is on S:, the
+#  same disk as the data and the original .env files, so encryption gives no more
+#  protection. Also Test-BackupContent.ps1 can still check its contents.
+#  AGE_PUBLIC_KEYS excludes GPG_*/AGE_PASSPHRASE. Restore: README.
+#
+#  REMOVED (2026-10-11): dvb-remote-scope (decision D7 of the scope downgrade,
+#  PIANO-DECLASSAMENTO-scope.md). The Pi has an SSD behind a USB bridge that
+#  already corrupted archives. A write of 2.5 GB to it each Sunday at 05:00 was
+#  no longer useful. V4 keeps two copies: dvb-local and dvb-remote-the-grid.
+#  The references to dvb-remote-scope in the notes above are history, not code.
+# =============================================================================
+
+# Exclusions shared by the two services. They are here since 2026-10-02 (before,
+# in the .env files). They are not a secret, so it is better in git. They override
+# BACKUP_EXCLUDE_REGEXP of the .env files (environment: wins over env_file).
+# Added on 2026-10-02: docker-appdata/tdarr/server/Tdarr/DB2. It is the live Tdarr
+# database (SQLite in WAL + JSONDB, 524 MB, of which 499 are JobReports). The
+# test run of 2026-10-02 03:31 FAILED because the -shm file disappeared between
+# the list and the read (lstat ENOENT). We cannot stop Tdarr (transcodes). The
+# zip that Tdarr makes each night at 00:00 in server/Tdarr/Backups (in the
+# backup) already contains DB2/SQL and all the JSONDB. Only the JobReports
+# history stays out.
+x-backup-exclude: &backup-exclude '^/backup/(hermes-home/\.cache|docker-yml/(tautulli/config/(cache|logs|backups)|spoolman/data/(cache|backups)|hermes/backup)|docker-appdata/tdarr/server/Tdarr/DB2)/'
+
+services:
+
+  # ---------------------------------------------------------------------------
+  #  1) LOCAL ARCHIVE
+  # ---------------------------------------------------------------------------
+  dvb-local:
+    # Pinned to v2.49.1 on 2026-10-14 (before :v2, updated by the Watchtower of V4,
+    # now removed). The same rule as dvb-local on the-grid: for a backup, "checked"
+    # is more important than "updated". New versions: PIANO-RELEASE-CHECK.md, manual update.
+    image: offen/docker-volume-backup:v2.49.1
+    container_name: dvb-local
+    restart: always
+    env_file: ./backup-local.env
+    environment:
+      BACKUP_EXCLUDE_REGEXP: *backup-exclude
+    volumes:
+      # --- docker socket: necessary to stop paperless-db during the backup ---
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # --- NOTIFICATION TEMPLATES (the tool parses each file in here) ---
+      - type: bind
+        source: "S:/github/homelab/stacks/volume-backup/notifications-local"
+        target: /etc/dockervolumebackup/notifications.d
+        read_only: true
+
+      # --- TARGET ---
+      - type: bind
+        source: "S:/Bakcup_Servarr+/Docker Volumes"
+        target: /archive
+
+      # --- SOURCES: Windows bind mounts (read only) ---
+      # Docker yml also contains paperless/{data,media}, yamtrack, seerr,
+      # tautulli, spoolman, hermes-repos and all the compose files.
+      - type: bind
+        source: "S:/Bakcup_Servarr+/Docker yml"
+        target: /backup/docker-yml
+        read_only: true
+      - type: bind
+        source: "B:/immich-library/backups"
+        target: /backup/immich-db-dumps
+        read_only: true
+      # configs of the ARCADE stacks (tdarr, qbit_manage, cleanuparr,
+      # kometa, umtk): added on 2026-10-02, before it was in no backup
+      - type: bind
+        source: "S:/docker-appdata"
+        target: /backup/docker-appdata
+        read_only: true
+
+  # ---------------------------------------------------------------------------
+  #  2) OFFSITE COPY TO the-grid
+  # ---------------------------------------------------------------------------
+  dvb-remote-the-grid:
+    # Pinned to v2.49.1 on 2026-10-14, refer to dvb-local.
+    image: offen/docker-volume-backup:v2.49.1
+    container_name: dvb-remote-the-grid
+    restart: always
+    env_file: ./backup-the-grid.env
+    environment:
+      BACKUP_EXCLUDE_REGEXP: *backup-exclude
+      # age encryption, refer to the note of 2026-10-02 in the header
+      AGE_PUBLIC_KEYS: "age1khzlxt53uvcdfhyj0zka0w3k25ns9pnqlxyn2lnq6ktyrd4ln5usjfflfy"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # --- NOTIFICATION TEMPLATES ---
+      - type: bind
+        source: "S:/github/homelab/stacks/volume-backup/notifications-the-grid"
+        target: /etc/dockervolumebackup/notifications.d
+        read_only: true
+
+      # --- SSH key (read only) ---
+      # Made on the-grid, downloaded here with scp. Authorized on the-grid with the
+      # prefix "restrict" (no pty/port/X11/agent forwarding), the same
+      # pattern as dvb-remote-scope and its the-grid->scope twin.
+      - type: bind
+        source: "S:/github/homelab/stacks/volume-backup/ssh/id_ed25519_the-grid"
+        target: /ssh/id_ed25519_the-grid
+        read_only: true
+
+      # --- SOURCES: identical to dvb-local ---
+      - type: bind
+        source: "S:/Bakcup_Servarr+/Docker yml"
+        target: /backup/docker-yml
+        read_only: true
+      - type: bind
+        source: "B:/immich-library/backups"
+        target: /backup/immich-db-dumps
+        read_only: true
+      # configs of the ARCADE stacks (tdarr, qbit_manage, cleanuparr,
+      # kometa, umtk): added on 2026-10-02, before it was in no backup
+      - type: bind
+        source: "S:/docker-appdata"
+        target: /backup/docker-appdata
+        read_only: true
+
+# =============================================================================
+#  SOURCES TO ADD
+#  Each new stack under S:/Bakcup_Servarr+/Docker yml/<stack>/ is already
+#  in the backup automatically, through the bind on /backup/docker-yml above. A
+#  NAMED DOCKER VOLUME is not: add it explicitly to BOTH services (the same
+#  form as the binds above). If not, that volume never goes into the archive,
+#  and no error tells you.
+# =============================================================================

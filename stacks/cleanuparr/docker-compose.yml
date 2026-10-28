@@ -1,0 +1,68 @@
+# =============================================================================
+#  Stack: CLEANUPARR  --  ARCADE
+#  Automatic cleanup of stuck or failed downloads for Radarr, Sonarr and
+#  qBittorrent (bare metal apps on this host). Web UI on 11011, published by
+#  Caddy on the-grid (cleanuparr.homelab.example, behind CrowdSec).
+#
+#  Moved into the repo on 2026-10-01 (before, it ran from
+#  S:\Bakcup_Servarr+\Docker yml\cleanuparr\). The project name did not change:
+#  `name:` below sets it. No .env: the stack has no variables. The data is in
+#  S:/docker-appdata/cleanuparr/config, as for qbit_manage and tdarr: an
+#  ABSOLUTE path (CLAUDE.md, Trappola 1). A `./config` here points into the repo.
+#  Contents: SQLite with WAL (cleanuparr.db, events.db, users.db), jwt-key.bin,
+#  DataProtection-Keys. Copy them only when you stop the container.
+#
+#  No network on purpose: Compose makes "cleanuparr_default", isolated for
+#  this project only (the same pattern as qbit_manage and tdarr). Until
+#  2026-09-12 it was on the shared network "proxy", from the old local Caddy.
+#  Refer to PROBLEMI-E-SOLUZIONI.md §7.5 for the incident of that removal.
+#
+#  No secret in the compose: no Phase 1 before Komodo. First Stack of
+#  ARCADE in Komodo (2026-10-02, PIANO-KOMODO-SECRETS-GATE.md §2b.3): Run
+#  Directory /run/desktop/mnt/host/s/github/homelab/stacks/cleanuparr, Project
+#  Name cleanuparr, empty Environment. Not in Watchtower: updates go through the gate.
+#
+#  Download Cleaner, since 2026-10-16: no seeding rule. The only rule,
+#  "private tracker A", no longer exists (the API call /api/seeding-rules with the
+#  method DELETE removed it). It needed the tags private tracker A and other together (never
+#  together: it never started). If it started, max_inactive_days=2 and
+#  max_seed_time=192 h (exactly 8 days, no margin) would remove private tracker A
+#  torrents that are still in H&R. qbit_manage (limits) and Sonarr/Radarr
+#  (removeCompletedDownloads) stop and remove the torrents. Refer to
+#  stacks/qbit_manage/README.md.
+#
+#  State since 2026-10-16: only the Queue Cleaner is on (it removes the torrents
+#  that have all their files excluded in qBittorrent: the fakes). Content Blocker,
+#  Blacklist Sync and Download Cleaner are off. Login is necessary everywhere.
+#  Before, the UI was open to the internet, because behind Caddy each request
+#  looks local (auth_disable_auth_for_local_addresses is off, through
+#  /api/configuration/general). Do not turn it on while the Caddy route
+#  cleanuparr.homelab.example exists.
+# =============================================================================
+
+name: cleanuparr
+
+services:
+  cleanuparr:
+    image: ghcr.io/cleanuparr/cleanuparr:latest
+    container_name: cleanuparr
+    restart: always
+    ports:
+      - "11011:11011"
+    volumes:
+      - S:/docker-appdata/cleanuparr/config:/config
+    environment:
+      - PORT=11011
+      - BASE_PATH=
+      - PUID=1000
+      - PGID=1000
+      - UMASK=022
+      - TZ=Europe/Rome
+    labels:
+      # dvb-local (Mon+Thu 02:15) and the offsite copies stop it while they read
+      # S:/docker-appdata. The QueueCleaner runs every 5 minutes, also at
+      # 02:15:00, and a SQLite copy made during a write can be inconsistent
+      - docker-volume-backup.stop-during-backup=true
+      # Komodo manages it since 2026-10-02 (Stack "cleanuparr", Server arcade):
+      # the updates go through the CVE gate, not through Watchtower
+      - com.centurylinklabs.watchtower.enable=false

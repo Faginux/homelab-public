@@ -1,0 +1,14 @@
+# The private SSH key must NEVER go to GitHub
+ssh/
+*.pem
+*.key
+id_ed25519
+id_ed25519.pub
+id_ed25519_the-grid
+id_ed25519_the-grid.pub
+id_rsa
+
+# The env files contain the Telegram bot token
+backup-local.env
+backup-scope.env
+backup-the-grid.env

@@ -1,0 +1,24 @@
+[Unit]
+Description=CVE gate: scan with Trivy the updates that Komodo reports, send a Telegram alert (never a deploy)
+# Ordering only, no Requires=. If you stop Docker on purpose, the gate must not
+# start it again. It fails and reports the failure.
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The docker group (docker run of Trivy) and the secrets in /srv/docker/_secrets
+# belong to ops. It does not need root.
+User=ops
+# Creates /var/lib/komodo-gate, owned by User=, and passes the path in
+# $STATE_DIRECTORY. The gate keeps the last notified result there.
+StateDirectory=komodo-gate
+ExecStart=/usr/local/bin/komodo-gate
+# The docker group is equal to root. These lines protect against mistakes of the
+# tool (writes in the wrong place), not against an attacker.
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+# First run: the Trivy DB (about 1 GB with the Java one) and the scans from the
+# registry. The tool stops itself after 60 minutes. This is the safety net.
+TimeoutStartSec=90min

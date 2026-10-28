@@ -1,0 +1,7 @@
+[wsl2]
+processors=6
+memory=6GB
+swap=8GB
+
+[experimental]
+autoMemoryReclaim=dropCache

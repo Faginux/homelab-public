@@ -1,0 +1,196 @@
+# =============================================================================
+#  Stack: PAPERLESS-NGX  --  the-grid (GMKtec NucBox G11)
+#  Phase 6. Migration through document_exporter/document_importer, NEVER direct
+#  copy of files/volumes -- see PIANO-MIGRAZIONE-STACK-the-grid.md Phase 6.
+#
+#  Source export: 35 documents, 36.3 MB. The export ran on 2026-08-28 from paperless-ngx
+#  on ARCADE (image ghcr.io/paperless-ngx/paperless-ngx@sha256:3838b9a4
+#  2..., created 2026-08-01).
+#  The operator migrated Paperless on 2026-08-28 (PIANO-MIGRAZIONE-STACK-the-grid.md, Phase 6).
+#  For a new import, use an empty database. The official doc of
+#  document_importer requires it. First up, then import, never the contrary.
+#
+#  TWO DELIBERATE CHANGES compared with the source:
+#
+#  1) db and broker (redis) used Docker NAMED VOLUMES on the source.
+#     Here they are bind mounts on /srv/docker/paperless/, like all the rest of
+#     the-grid. Reason: nodes/the-grid/backup/docker-compose.yml covers
+#     automatically only /srv/docker. A named volume needs a manual addition to
+#     BOTH backup services (see the comment at the end of that file). That step
+#     is easy to forget. No functional impact: Postgres/Redis do not care if the
+#     storage is a named volume or a bind mount, if the permissions are right.
+#     Here the init is new. The import writes through SQL and does not copy
+#     files of Postgres. So there is no problem of earlier UID.
+#
+#  2) gotenberg and tika have /tmp bind-mounted on a real path of the disk
+#     (/srv/docker/paperless/tmp), not left to the default of the image.
+#     Reason: the /tmp OF THE the-grid HOST is a 5.9 GiB tmpfs (it uses RAM).
+#     We do not know if the two images use an equivalent internal /tmp
+#     or one on overlay/disk. An explicit mount removes the doubt at zero cost.
+#
+#  Label docker-volume-backup.stop-during-backup=true on paperless-ngx AND
+#  paperless-db (not on redis/gotenberg/tika, no state to protect there).
+#  offen/docker-volume-backup stops all the labeled containers together
+#  before it archives. So the whole stack stops in a consistent way, not only the
+#  DB with the app still active on top of a dead connection.
+#
+#  Network: Tailscale only (198.51.100.20), same port 8000 as Yamtrack but
+#  on a different host port (8010) to avoid a conflict. The container side
+#  stays 8000, checked by the healthcheck of the source. No direct
+#  LAN binding: not requested for this stack, unlike Phase 5.
+#
+#  Caddy dependency closed. Since Phase 8 the Caddyfile on the-grid does
+#  reverse_proxy 198.51.100.20:8010 for paperless.homelab.example.
+# =============================================================================
+
+services:
+  broker:
+    image: docker.io/library/redis:7
+    container_name: paperless-redis
+    restart: unless-stopped
+    labels:
+      # Stack in Komodo (Phase 2): all the services go through the gate.
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - type: bind
+        source: /srv/docker/paperless/redis
+        target: /data
+
+  db:
+    image: docker.io/library/postgres:16
+    container_name: paperless-db
+    restart: unless-stopped
+    labels:
+      - "docker-volume-backup.stop-during-backup=true"
+      # Stack in Komodo (Phase 2): all the services go through the gate.
+      - "com.centurylinklabs.watchtower.enable=false"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      # Password from a file (since 2026-09-23, PIANO-KOMODO-SECRETS-GATE.md Phase 1).
+      # It REPLACES POSTGRES_PASSWORD, do not put them together. file_env of the
+      # entrypoint exits with an error if it finds both. With a DB already
+      # initialized it does not even read the file (it serves only to initdb).
+      # The file stays valid for a re-init.
+      - POSTGRES_PASSWORD_FILE=/run/secrets/paperless_db_password
+    secrets:
+      - paperless_db_password
+    volumes:
+      - type: bind
+        source: /srv/docker/paperless/db
+        target: /var/lib/postgresql/data
+
+  gotenberg:
+    image: docker.io/gotenberg/gotenberg:8
+    container_name: paperless-gotenberg
+    restart: unless-stopped
+    labels:
+      # Stack in Komodo (Phase 2): all the services go through the gate.
+      - "com.centurylinklabs.watchtower.enable=false"
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+    volumes:
+      - type: bind
+        source: /srv/docker/paperless/tmp
+        target: /tmp
+
+  tika:
+    # Pinned to 4.0.0 (it was :latest). Watchtower already brought it by itself to
+    # this major on 2026-09-01 (config XML->JSON, different jar). Nobody
+    # noticed. No error observed in the logs so far.
+    # apache/tika has no "major only" tag like postgres/redis/gotenberg.
+    # It is either :latest (which now takes the major jumps in full) or a pinned
+    # version. enable=false: the operator does the next bumps by hand after a test.
+    image: docker.io/apache/tika:4.1.0
+    container_name: paperless-tika
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - type: bind
+        source: /srv/docker/paperless/tmp
+        target: /tmp
+
+  paperless-ngx:
+    # Pinned to 3.1.1 (it was :latest, the version really running today).
+    # The jump 2.x->3.x already broke other users (secret key that became
+    # mandatory, a corrupt migration in 3.0.1, solved only in 3.0.2). There is no
+    # official "minor only" tag to avoid the major jumps (see
+    # discussion #12720 upstream). Do manual bumps with the changelog at hand.
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.3.1
+    container_name: paperless-ngx
+    restart: unless-stopped
+    depends_on:
+      - db
+      - broker
+      - gotenberg
+      - tika
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    labels:
+      - "docker-volume-backup.stop-during-backup=true"
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - type: bind
+        source: /srv/docker/paperless/data
+        target: /usr/src/paperless/data
+      - type: bind
+        source: /srv/docker/paperless/media
+        target: /usr/src/paperless/media
+      - type: bind
+        source: /srv/docker/paperless/export
+        target: /usr/src/paperless/export
+      - type: bind
+        source: /srv/docker/paperless/consume
+        target: /usr/src/paperless/consume
+    # No env_file (since 2026-09-24, PIANO-KOMODO-SECRETS-GATE.md Phase 1
+    # way b). It brought ALL the .env into the container, including COMPOSE_PROJECT_NAME
+    # and POSTGRES_* that the app does not need. Any variable added in the
+    # future, secrets included, would have ended in the config that Komodo saves.
+    # Now only what this list names passes. A new variable in the .env
+    # does NOT reach the container until you add it to this list.
+    environment:
+      # Secrets from a file: the s6 script init-env-file (it runs as root) reads each
+      # PAPERLESS_*_FILE and sets the variable without the suffix. It keeps a
+      # possible final newline in the value, so the files must not have one.
+      # Same file as the password of `db`: the two copies cannot diverge.
+      - PAPERLESS_DBPASS_FILE=/run/secrets/paperless_db_password
+      - PAPERLESS_SECRET_KEY_FILE=/run/secrets/paperless_secret_key
+      # Config that is not sensitive, values in the .env (list: .env.example).
+      - PAPERLESS_TIME_ZONE=${PAPERLESS_TIME_ZONE}
+      - PAPERLESS_OCR_LANGUAGE=${PAPERLESS_OCR_LANGUAGE}
+      - PAPERLESS_OCR_LANGUAGES=${PAPERLESS_OCR_LANGUAGES}
+      - PAPERLESS_URL=${PAPERLESS_URL}
+      - PAPERLESS_USE_X_FORWARD_HOST=${PAPERLESS_USE_X_FORWARD_HOST}
+      - PAPERLESS_PROXY_SSL_HEADER=${PAPERLESS_PROXY_SSL_HEADER}
+      - PAPERLESS_TRUSTED_PROXIES=${PAPERLESS_TRUSTED_PROXIES}
+      - PAPERLESS_DBHOST=${PAPERLESS_DBHOST}
+      - PAPERLESS_DBNAME=${PAPERLESS_DBNAME}
+      - PAPERLESS_DBUSER=${PAPERLESS_DBUSER}
+      - PAPERLESS_REDIS=${PAPERLESS_REDIS}
+      - PAPERLESS_TIKA_ENABLED=${PAPERLESS_TIKA_ENABLED}
+      - PAPERLESS_TIKA_GOTENBERG_ENDPOINT=${PAPERLESS_TIKA_GOTENBERG_ENDPOINT}
+      - PAPERLESS_TIKA_ENDPOINT=${PAPERLESS_TIKA_ENDPOINT}
+      - PAPERLESS_TASK_WORKERS=${PAPERLESS_TASK_WORKERS}
+      - PAPERLESS_THREADS_PER_WORKER=${PAPERLESS_THREADS_PER_WORKER}
+      - PAPERLESS_FILENAME_FORMAT=${PAPERLESS_FILENAME_FORMAT}
+    secrets:
+      - paperless_db_password
+      - paperless_secret_key
+    ports:
+      - "198.51.100.20:8010:8000"
+
+# The operator wrote these files on the host (moved from the .env without seeing them).
+# They have no final newline and sit inside the encrypted backup of /srv/docker.
+# Root reads them in both the containers (s6 init / postgres entrypoint before gosu).
+# Permissions 0400 of ops.
+secrets:
+  paperless_db_password:
+    file: /srv/docker/_secrets/paperless/db_password
+  paperless_secret_key:
+    file: /srv/docker/_secrets/paperless/secret_key

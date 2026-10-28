@@ -1,0 +1,36 @@
+# Komodo Periphery on the-grid. Destination: /etc/systemd/system/komodo-periphery.service
+# (644, root). Written by hand instead of the official installer
+# (scripts/setup-periphery.py). That installer runs as root. With --user it still
+# leaves root_directory=/etc/komodo (the default of the argument is never None).
+# It takes the binary from the latest release but the config template from "main".
+[Unit]
+Description=Komodo Periphery (agent on the-grid, outgoing connection to Komodo Core)
+# Ordering only, no Requires=. If you stop Docker on purpose,
+# Periphery must not start it again.
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+# Not root: ops is in the docker group (systemd loads the supplementary groups
+# of the user) and owns /srv/docker/komodo/periphery.
+User=ops
+Group=ops
+Environment=HOME=/home/ops
+# Onboarding key (PERIPHERY_ONBOARDING_KEY=...), read by systemd as root before it
+# lowers the privileges. The file can stay root:root 600.
+# The "-" makes the file optional. After the first connection it must be DELETED.
+EnvironmentFile=-/etc/komodo/periphery-onboarding.env
+ExecStart=/usr/local/bin/periphery --config-path /home/ops/github/homelab/nodes/the-grid/komodo/periphery.config.toml
+Restart=on-failure
+RestartSec=5
+
+# A safety net, like the ":ro" used for the DockHand test. Systemd mounts the repo
+# read-only FOR THIS PROCESS. If Komodo tries to write a compose file or a .env file of a
+# "files on host" stack again, the write fails with EROFS. The working tree of the-grid stays clean.
+# It protects against mistakes, not against an attack. With the Docker socket,
+# Periphery is root in practice.
+ReadOnlyPaths=/home/ops/github/homelab
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

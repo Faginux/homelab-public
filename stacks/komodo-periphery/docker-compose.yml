@@ -1,0 +1,83 @@
+# =============================================================================
+#  Stack: KOMODO-PERIPHERY  --  ARCADE
+#  Komodo agent (ghcr.io/moghtech/komodo-periphery, GPL-3.0). It shows
+#  ARCADE in Komodo as the Server "arcade" (PIANO-KOMODO-SECRETS-GATE.md,
+#  Phase 2b step 1). Core runs on the-grid.
+#
+#  A container, not a native binary: release v2.3.3 has no Periphery for
+#  Windows. Periphery v2 opens an OUTBOUND websocket to Core
+#  (https://komodo.homelab.example -> wss://komodo.homelab.example/ws/periphery, private
+#  Caddy block with remote_ip 100.64.0.0/10), as Hawser did to DockHand.
+#  With core_address set, server_enabled is false: no listening port and no
+#  published port.
+#
+#  Step 2 (PIANO §2b.3, since 2026-10-02): the container mounts the repo READ ONLY.
+#  It uses the same path that the Docker Desktop daemon uses for the disk S:
+#  (/run/desktop/mnt/host/s/...). Thus a `./` that compose resolves in here is
+#  also a valid path for the daemon (Trappola 1 of CLAUDE.md). The absolute
+#  paths `S:/...` of the compose files already work. The Docker Desktop proxy
+#  translates them also from a Linux client (checked on 2026-10-02 with
+#  `docker run --mount src=S:/...` from inside this container). The :ro works as
+#  the ReadOnlyPaths of Periphery on the-grid: Komodo cannot write into the repo.
+#
+#  Onboarding done on 2026-09-25 with a key from
+#  PERIPHERY_ONBOARDING_KEY_FILE (Compose secret, ./secrets/, in .gitignore).
+#  Then the operator removed the key in Komodo and from here. Since then, the
+#  identity is the volume "keys": periphery.key/.pub of ARCADE and core.pub.
+#  core.pub is the public key of Core, saved at the first connection (Periphery
+#  accepts only that key). `down -v` removes the volume, and then a new
+#  onboarding is necessary. Put the lines back (refer to 48c08fe) with a new key
+#  that the operator writes.
+#
+#  No host /proc (the official compose mounts it). On Docker Desktop it is the
+#  /proc of the WSL VM, not of Windows. Only the process list uses it.
+#  The CPU, RAM and disk that Komodo shows are of the Docker Desktop WSL VM,
+#  not of all of ARCADE.
+#
+#  root_directory on a named volume: Komodo uses it for Stack/Repo/Build, here
+#  it is empty. The official compose mounts it with the same path inside and
+#  outside. Only Stacks need that (step 2, check it again then).
+#
+#  The compose file PINS the image (tag + digest) to the version of Core. The
+#  Watchtower of this host does not update it. It updates together with Core, not
+#  alone.
+#
+#  It runs as root and mounts docker.sock: full control of Docker Desktop, the
+#  same level as Hawser. Host terminal off, terminal in the containers on: as
+#  Periphery on the-grid. restart: unless-stopped, so a manual stop stays a stop.
+# =============================================================================
+
+# This file sets the project name, not the .env. It is the only variable that
+# the stack would have, and here it is in git. A COMPOSE_PROJECT_NAME in the
+# .env would override it. Do not create one.
+name: komodo-periphery
+
+services:
+  periphery:
+    image: ghcr.io/moghtech/komodo-periphery:2.3.3@sha256:fa3f1a641a265216066676950d5eecdf506955a7bafe2f01996135ae93115cd5
+    container_name: komodo-periphery
+    init: true
+    restart: unless-stopped
+    environment:
+      - PERIPHERY_CORE_ADDRESS=https://komodo.homelab.example
+      - PERIPHERY_CONNECT_AS=arcade
+      - PERIPHERY_CORE_PUBLIC_KEYS=file:/config/keys/core.pub
+      - PERIPHERY_ROOT_DIRECTORY=/etc/komodo
+      - PERIPHERY_DISABLE_TERMINALS=true
+      - PERIPHERY_DISABLE_CONTAINER_EXEC=false
+      # Disk: only the disk that holds /etc/hostname (the disk of the VM).
+      # If not, Komodo also adds the mounts of Docker Desktop.
+      - PERIPHERY_INCLUDE_DISK_MOUNTS=/etc/hostname
+    volumes:
+      - keys:/config/keys
+      - /var/run/docker.sock:/var/run/docker.sock
+      - root:/etc/komodo
+      # Run Directory of the ARCADE Stacks in Komodo: absolute path below
+      # this mount, for example /run/desktop/mnt/host/s/github/homelab/stacks/tdarr
+      - S:/github/homelab:/run/desktop/mnt/host/s/github/homelab:ro
+    labels:
+      - com.centurylinklabs.watchtower.enable=false
+
+volumes:
+  keys:
+  root:

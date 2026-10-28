@@ -1,0 +1,16 @@
+[Unit]
+Description=Send a Telegram alert if a container does not match the compose file of the repo (drift)
+# Ordering only, no Requires=. If you stop Docker on purpose, this check
+# must not start it again.
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The docker group, the repo and /srv/docker/_secrets/telegram belong to ops.
+# It does not need root.
+User=ops
+# Creates /var/lib/docker-compose-drift-check, owned by User=, and passes the
+# path in $STATE_DIRECTORY. The script keeps the last notified state there.
+StateDirectory=docker-compose-drift-check
+ExecStart=/usr/local/bin/docker-compose-drift-check.sh

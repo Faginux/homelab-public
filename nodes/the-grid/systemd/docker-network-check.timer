@@ -1,0 +1,12 @@
+[Unit]
+Description=Hourly check of the containers with no network (at :30 and 10 minutes after the boot)
+
+[Timer]
+# At :30 and not at :00. This avoids the middle of the restart of flaresolverr
+# (cron 04:00), of the dvb backups (03:00, 05:00) and of watchtower (06:00, removed on 2026-10-14).
+OnCalendar=*-*-* *:30:00
+OnBootSec=10min
+Unit=docker-network-check.service
+
+[Install]
+WantedBy=timers.target

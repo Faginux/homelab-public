@@ -1,0 +1,8 @@
+[Unit]
+Description=Check the state of the containers after the boot, send a Telegram alert only if something is wrong
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/docker-boot-sanity-check.sh

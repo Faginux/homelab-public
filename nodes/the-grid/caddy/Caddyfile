@@ -1,0 +1,212 @@
+{
+        email admin@homelab.example
+
+        # === CrowdSec Bouncer ===
+        order crowdsec first
+        crowdsec {
+                api_url http://crowdsec:8080
+                api_key {env.CROWDSEC_API_KEY}
+        }
+
+        # === Trusted Proxies Cloudflare ===
+        # 'static private_ranges' does NOT cover the Cloudflare edges (public IPs).
+        # Caddy ignored Cf-Connecting-Ip. CrowdSec and the logs saw the shared
+        # edge IP, not the real client. 'cloudflare' fetches the real public
+        # ranges (module http.ip_sources.cloudflare, already in the binary).
+        # See PROBLEMI-E-SOLUZIONI.md §10.2.
+        servers {
+                trusted_proxies cloudflare
+                client_ip_headers Cf-Connecting-Ip
+        }
+
+        # === Dynamic DNS ===
+        # '@' is the apex record homelab.example. 'immich' is a DNS-only record
+        # (grey cloud) that must hold the public IP of the home. The module
+        # does not update the apex when the list has a subdomain, so '@' is explicit.
+        dynamic_dns {
+                provider cloudflare {env.CLOUDFLARE_API_TOKEN}
+                domains {
+                        homelab.example @ immich
+                }
+        }
+}
+
+*.homelab.example {
+        tls {
+                dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+        }
+
+        # === JSON log for CrowdSec ===
+        log {
+                output file /var/log/caddy/access.log {
+                        roll_size 50MiB
+                        roll_keep 5
+                }
+                format json
+        }
+
+        # =============================================
+        # PUBLIC services (through the Cloudflare proxy)
+        # CrowdSec active - traffic from the Internet
+        # =============================================
+
+        @paperless host paperless.homelab.example
+        handle @paperless {
+                crowdsec
+                reverse_proxy 198.51.100.20:8010
+        }
+
+        @vault host vault.homelab.example
+        handle @vault {
+                crowdsec
+                reverse_proxy 192.0.2.20:8080
+        }
+
+        @qbit host qbit.homelab.example
+        handle @qbit {
+                crowdsec
+                reverse_proxy 192.0.2.10:8082
+        }
+
+        @tautulli host tautulli.homelab.example
+        handle @tautulli {
+                crowdsec
+                reverse_proxy 198.51.100.20:8181
+        }
+
+        @cleanuparr host cleanuparr.homelab.example
+        handle @cleanuparr {
+                crowdsec
+                reverse_proxy 192.0.2.10:11011
+        }
+
+        @yamtrack host yamtrack.homelab.example
+        handle @yamtrack {
+                crowdsec
+                reverse_proxy 198.51.100.20:8000
+        }
+
+        # Spoolman has NO login of its own (wiki of Spoolman: "Spoolman has no
+        # authentication"). Since 2026-10-27 basic_auth stands in front of it.
+        # The user name and the bcrypt hash are NOT in the repo. They are in
+        # /config/spoolman-basic-auth.txt in the container (host path
+        # /srv/docker/caddy/config/), one line: "<user> <bcrypt hash>".
+        # If the file is missing, Caddy cannot load this Caddyfile.
+        @spoolman host spoolman.homelab.example
+        handle @spoolman {
+                crowdsec
+                basic_auth {
+                        import /config/spoolman-basic-auth.txt
+                }
+                reverse_proxy 198.51.100.20:7912
+        }
+
+        # Seerr - public since 2026-10-27 (Faginux). Cloudflare proxy and CrowdSec,
+        # like the other public names. Seerr has its own login.
+        @seerr host seerr.homelab.example
+        handle @seerr {
+                crowdsec
+                reverse_proxy 198.51.100.20:5055
+        }
+
+        # Immich - public since 2026-10-27 (Faginux), for the phone backup with no
+        # VPN. DNS only (grey cloud): the record holds the public IP of the home,
+        # and the dynamic_dns block above keeps it current. The Cloudflare proxy
+        # must stay OFF: the free plan limits a request body to 100MB, and large
+        # videos fail. From 2026-10-20 to 2026-10-27 the record held the Tailscale
+        # IP of the-grid and this route had remote_ip. CrowdSec stays active, and
+        # Immich has its own login.
+        # flush_interval -1: direct streaming with no buffering.
+        # It is essential for large video uploads without using all the RAM.
+        @immich host immich.homelab.example
+        handle @immich {
+                crowdsec
+                request_body {
+                        max_size 50000MB
+                }
+                reverse_proxy 192.0.2.10:2283 {
+                        flush_interval -1
+                }
+        }
+
+        # =============================================
+        # PRIVATE services (Tailscale only)
+        # The DNS points to the Tailscale IP of the-grid, but this alone is NOT enough.
+        # Port 443 of the router reaches Caddy from the whole Internet.
+        # Whoever sends the right name to the public IP could reach the backend
+        # (finding F1, PIANO-MAPPA-HOMELAB.md). Since 2026-10-20 each matcher has
+        # remote_ip on the TCP peer. Only the tailnet passes, and the rest goes
+        # to the 404 fallback.
+        # No CrowdSec - traffic only from the trusted VPN.
+        # =============================================
+
+        @radarr {
+                host radarr.homelab.example
+                remote_ip 100.64.0.0/10
+        }
+        handle @radarr {
+                reverse_proxy 192.0.2.10:7878
+        }
+
+        @sonarr {
+                host sonarr.homelab.example
+                remote_ip 100.64.0.0/10
+        }
+        handle @sonarr {
+                reverse_proxy 192.0.2.10:8989
+        }
+
+        @prowlarr {
+                host prowlarr.homelab.example
+                remote_ip 100.64.0.0/10
+        }
+        handle @prowlarr {
+                reverse_proxy 192.0.2.10:9696
+        }
+
+        @tdarr {
+                host tdarr.homelab.example
+                remote_ip 100.64.0.0/10
+        }
+        handle @tdarr {
+                reverse_proxy 192.0.2.10:8265
+        }
+
+        @beszel {
+                host beszel.homelab.example
+                remote_ip 100.64.0.0/10
+        }
+        handle @beszel {
+                reverse_proxy 192.0.2.30:8090
+        }
+
+        # Komodo Core: root panel on the Docker hosts. The private DNS is NOT enough.
+        # *.homelab.example has a wildcard to Cloudflare, and a missing record would
+        # expose it. remote_ip looks at the TCP peer (not Cf-Connecting-Ip).
+        # Only the tailnet passes, and all the rest ends in the 404 fallback.
+        # (The operator removed the DockHand block, same scheme, on 2026-10-14.)
+        @komodo {
+                host komodo.homelab.example
+                remote_ip 100.64.0.0/10
+        }
+        handle @komodo {
+                reverse_proxy 198.51.100.20:9120
+        }
+
+        # Homepage (scope): start page WITHOUT authentication. It shows data
+        # from the Komodo API. Same scheme as komodo: remote_ip on the TCP peer.
+        # Outside the tailnet the result is the 404 fallback. Backend on the
+        # Tailscale IP of the scope. Docker publishes the port only there.
+        @home {
+                host home.homelab.example
+                remote_ip 100.64.0.0/10
+        }
+        handle @home {
+                reverse_proxy 198.51.100.30:3000
+        }
+
+        # === Fallback ===
+        handle {
+                respond "Not found" 404
+        }
+}

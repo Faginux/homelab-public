@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly check of the Docker updates (Saturday 10:00)
+
+[Timer]
+OnCalendar=Sat *-*-* 10:00:00
+# If the-grid is off on Saturday at 10:00, the check runs at the first good boot.
+Persistent=true
+Unit=docker-updates-check.service
+
+[Install]
+WantedBy=timers.target

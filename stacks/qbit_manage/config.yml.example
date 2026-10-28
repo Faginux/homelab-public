@@ -1,0 +1,107 @@
+# =============================================================================
+#  config.yml.example  --  qbit_manage (ARCADE)
+#  Sanitized copy of the real config: host/user/pass are `changeme`. The values
+#  that are not secret are the values in use on 2026-09-30 (but recycle_bin and
+#  share_limits_last_active_tag are back to the upstream defaults. The groups
+#  private-tracker-a and default got max_seeding_time on 2026-10-16. On
+#  2026-10-25: default at 48 h, private-tracker-b at 120 h + 1 h with a floor). The REAL
+#  config is in S:/docker-appdata/qbit_manage/config/config.yml, outside the repo.
+# =============================================================================
+qbt:
+  host: changeme
+  # Since 2026-10-14 in plain text here (path A of Phase 1), in single quotes.
+  # The real file is outside the repo, in the encrypted backup of S:/docker-appdata.
+  user: 'changeme'
+  pass: 'changeme'
+
+settings:
+  private_tag:
+  share_limits_tag: ~share_limit
+  disable_qbt_default_share_limits: true
+
+  force_auto_tmm: false
+  tracker_error_tag: issue
+  nohardlinks_tag: noHL
+  stalled_tag: stalledDL
+  share_limits_min_seeding_time_tag: MinSeedTimeNotReached
+  share_limits_min_num_seeds_tag: MinSeedsNotMet
+  share_limits_last_active_tag: LastActiveLimitNotReached
+  cat_filter_completed: true
+  share_limits_filter_completed: true
+  tag_nohardlinks_filter_completed: true
+  rem_unregistered_filter_completed: false
+  cat_update_all: true
+  force_auto_tmm_ignore_tags: []
+  tag_stalled_torrents: false
+  rem_unregistered_ignore_list: []
+  rem_unregistered_grace_minutes: 10
+  rem_unregistered_max_torrents: 10
+directory:
+  root_dir: /data/torrents     # placeholder, not active (no orphaned/nohardlinks feature is on)
+
+  recycle_bin: "/path/to/.RecycleBin"
+  torrents_dir:
+tracker:
+  private-tracker-b:
+    tag: private tracker B
+  private-tracker-a|private-tracker-a:
+    tag: private tracker A
+
+  other:
+    tag: other
+share_limits:
+  private-tracker-b:
+    priority: 1
+    include_all_tags:
+    - private tracker B
+    max_ratio: 2.0        # the tracker needs min 0.5, I keep my usual standard
+    max_seeding_time: 7260 # minutes = 120 h (private tracker B H&R minimum, decided on 2026-10-25) + 1 h margin
+    min_seeding_time: 7200 # floor = 120 h: if ratio 2.0 comes first, it seeds until 120 h (less than the max: it does not make it longer)
+    cleanup: false
+    add_group_to_tag: true
+    custom_tag: ~limit_DC
+    share_limit_action: Default
+  private-tracker-a:
+    priority: 2
+    include_all_tags:
+    - private tracker A
+    max_ratio: 2.0        # usual standard. TL H&R: ratio 1.0 or the days of the class (Power User = 8, 2026-10-16)
+    max_seeding_time: 11580 # minutes = 8 days + 1 h margin. qB stops at the first limit (ratio or time)
+    # min_seeding_time removed on 2026-10-16: with a max of 8 days it would make it 10 (the tag MinSeedTimeNotReached clears the limits)
+    cleanup: false
+    add_group_to_tag: true
+    custom_tag: ~limit_TL
+    share_limit_action: Default
+  default:
+    priority: 999
+    max_ratio: 2.0
+    max_seeding_time: 2880 # minutes = 48 h (decided on 2026-10-25): public trackers, no H&R. It stops at the first limit (ratio 2.0 or time)
+    cleanup: false
+    add_group_to_tag: false
+    share_limit_action: Default
+webhooks:
+  error:
+  run_start:
+  run_end:
+  function:
+    recheck:
+    cat_update:
+    tag_update:
+    rem_unregistered:
+    tag_tracker_error:
+    rem_orphaned:
+    tag_nohardlinks:
+    share_limits:
+    cleanup_dirs:
+recyclebin:
+  enabled: true
+  empty_after_x_days:
+  save_torrents: false
+  split_by_category: false
+orphaned:
+  empty_after_x_days:
+  exclude_patterns:
+  max_orphaned_files_to_delete: 50
+  min_file_age_minutes: 0
+cat:
+  S:\Downloads_torrent\complete: S:\Downloads_torrent\complete/

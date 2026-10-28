@@ -1,0 +1,56 @@
+# =============================================================================
+#  Stack: BESZEL (hub) + beszel-agent  --  scope (Argon ONE M.2).
+#  First capture in git of a stack that ran in production for months in
+#  /home/ops/beszel/ (it ran loose, with no repo). See PROBLEMI-E-
+#  SOLUZIONI.md for the background (scope config never versioned, found on
+#  2026-09-01) and STATO-scope.md for the role of the node.
+#
+#  This is the HUB that all three nodes use (beszel.homelab.example -> Caddy
+#  -> 192.0.2.30:8090, see nodes/the-grid/caddy/Caddyfile).
+#  The agent next to it monitors the scope itself -- the same official image
+#  used on the-grid (nodes/the-grid/beszel-agent/). ARCADE uses instead
+#  the native Windows agent through NSSM, not containerized.
+#
+#  1:1 COPY of the live config. Only functional change: KEY/TOKEN/HUB_URL
+#  of beszel-agent, before hardcoded in plain text, now ${BESZEL_KEY} /
+#  ${BESZEL_TOKEN} / ${BESZEL_HUB_URL} -- the same convention already used in
+#  nodes/the-grid/beszel-agent/.env.example. KEY is an ed25519
+#  PUBLIC key (not a secret), moved to .env anyway for
+#  consistency with the rest of the repo.
+#
+#  TRAP 1 (CLAUDE.md): the live version uses RELATIVE bind mounts
+#  (./beszel_data, ./beszel_agent_data). If you move the file to another folder,
+#  they point to empty directories. Here they are already ABSOLUTE paths. We read them
+#  from `docker inspect` on the scope on 2026-09-01 (not deduced from the compose file):
+#  /home/ops/beszel/beszel_data and /home/ops/beszel/beszel_agent_data.
+#  They are the same position as the real data. This step has no storage migration.
+#
+#  NO CUTOVER YET: nobody started this compose file from here yet.
+#  The live stack keeps running from /home/ops/beszel/ until the
+#  verification+switch phase ends. This phase needs explicit confirmation (Regola
+#  numero uno, rule number one).
+# =============================================================================
+
+services:
+  beszel:
+    image: henrygd/beszel:latest
+    container_name: beszel
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - /home/ops/beszel/beszel_data:/beszel_data
+
+  beszel-agent:
+    image: henrygd/beszel-agent
+    container_name: beszel-agent
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/ops/beszel/beszel_agent_data:/var/lib/beszel-agent
+    environment:
+      LISTEN: 45876
+      KEY: ${BESZEL_KEY}
+      TOKEN: ${BESZEL_TOKEN}
+      HUB_URL: ${BESZEL_HUB_URL}

@@ -1,0 +1,5 @@
+// After each dpkg run by apt: report the containers that still use the
+// old docker.sock (PROBLEMI-E-SOLUZIONI.md §2.11).
+// "99zz": runs after 99needrestart, so the warning is the last thing on the screen.
+// "|| true": a hook that fails makes the complete apt operation fail.
+DPkg::Post-Invoke { "test -x /usr/local/bin/docker-socket-stale-check.sh && /usr/local/bin/docker-socket-stale-check.sh || true"; };
