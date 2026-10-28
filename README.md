@@ -1,5 +1,10 @@
 # Homelab
 
+[![Map of the homelab: the three hosts, their services, the backups and the media flow](docs/map/homelab-poster.svg)](docs/map/homelab-poster.svg)
+
+*The poster comes from `docs/map/inventory.psd1`. Click it to open the full size. The drawing with
+the routes and the media flow is `docs/map/homelab-map.drawio`.*
+
 This repo has the configuration of a small homelab with three hosts: Docker stacks, systemd units,
 small tools in PowerShell, Go and shell, a generated map, and some dotfiles.
 
