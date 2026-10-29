@@ -38,16 +38,16 @@ func (c *checker) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	next, lines := nextState(prev, findings)
+	next, reports := nextState(prev, findings)
 
-	if len(lines) > 0 {
+	if len(reports) > 0 {
 		// Save the state only after a successful send. If Telegram fails, the next
 		// round tries again instead of losing the notice (same rule as komodo-gate).
-		if err := c.notify.Send(ctx, buildMessage(c.hostLabel, lines)); err != nil {
+		if err := c.notify.Send(ctx, buildMessage(c.hostLabel, reports)); err != nil {
 			return err
 		}
 		if !c.dryRun {
-			logf("telegram message sent (%d lines)", len(lines))
+			logf("telegram message sent (%d items)", len(reports))
 		}
 	} else {
 		logf("nothing new: no message")

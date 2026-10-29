@@ -29,18 +29,31 @@ only. Plan: `PIANO-RELEASE-CHECK.md`.
 | `any` | any newer version | calendar versions (`bitwarden/lite`) |
 | `rebuild` | none, only a new digest for the same tag | `umtk` (`latest` with a digest) |
 
-## Message lines
+## Message
+
+The message uses the Telegram HTML parse mode. There is one block for each image, then the plain
+lines, then a block to paste in Claude Code.
 
 | Line | Meaning |
 |---|---|
-| `nome (host stack): a → b` | A safe update. |
-| `nome (host stack): a ricostruita (stesso tag, digest nuovo)` | The registry has a new image under the same tag. |
-| `🆕 nuova major: nome (…): a → b` | A higher first part. Never in the same list as the safe update. |
+| `📦 nome — host stack` | Header of the block of one image. |
+| `⬆️ a → b` | A safe update. |
+| `🔁 a ricostruita (stesso tag, digest nuovo)` | The registry has a new image under the same tag. |
+| `🆕 major a → b (da valutare, non nel comando)` | A higher first part. It is not in the command to paste. |
+| `🔗 <url>` | The release notes (`notes` in `config.json`). |
 | `ERRORE nome: <causa>` | The registry did not answer. This is **not** "no update". |
 | `Rientrato: nome (motivo)` | The pin reached the reported version, or the error ended. |
 
-A line comes again only when the result for that image changes. The error text is not part of the
-state, so the same error does not repeat.
+The `<pre>` block (tap to copy) is a prompt for Claude Code. It lists the safe updates and the
+rebuilds. It tells Claude to read the notes, check the backup, edit the pins and show the diff and
+`docker compose --dry-run up -d`, then stop. The deploy stays with Faginux (rule number one). A
+message with only new majors has no block.
+
+If the message is too long, the tool leaves whole blocks out and adds a "troncato" line. The block to paste
+is never cut: a cut tag makes Telegram refuse the message.
+
+An image comes again only when the result for that image changes. The error text is not part of
+the state, so the same error does not repeat.
 
 ## Config
 

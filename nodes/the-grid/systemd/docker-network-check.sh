@@ -43,13 +43,13 @@ previous=$(cat "$STATE_FILE" 2>/dev/null || true)
 [ "$current" = "$previous" ] && exit 0
 
 if [ -n "$current" ]; then
-    message="🔴 🖧 ${HOST_LABEL} · 🌐 Rete container
+    message="🔴 🐧 ${HOST_LABEL} · 🌐 Rete container
 
 ${current}
 
 Risultano Up ma sono irraggiungibili. Dettagli: PROBLEMI-E-SOLUZIONI.md §2.10."
 else
-    message="🔁 🖧 ${HOST_LABEL} · 🌐 Rete container
+    message="🔁 🐧 ${HOST_LABEL} · 🌐 Rete container
 
 Tutti i container hanno di nuovo rete e porte."
 fi

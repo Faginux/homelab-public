@@ -22,7 +22,8 @@ type telegramNotifier struct {
 }
 
 func (t *telegramNotifier) Send(ctx context.Context, text string) error {
-	form := url.Values{"chat_id": {t.chatID}, "text": {text}}
+	// The text is HTML: buildMessage escapes it and uses <pre> for the block to paste.
+	form := url.Values{"chat_id": {t.chatID}, "text": {text}, "parse_mode": {"HTML"}}
 	endpoint := t.baseURL + "/bot" + t.botToken + "/sendMessage"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {

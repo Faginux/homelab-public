@@ -83,13 +83,13 @@ previous=$(cat "$STATE_FILE" 2>/dev/null || true)
 [ "$current" = "$previous" ] && exit 0
 
 if [ -n "$current" ]; then
-    message="🔴 🖧 ${HOST_LABEL} · 🧭 Drift compose
+    message="🔴 🐧 ${HOST_LABEL} · 🧭 Drift compose
 
 ${current}
 
 I container non corrispondono al compose del repo su the-grid. Prima di lanciare up -d verifica cosa cambierebbe: PROBLEMI-E-SOLUZIONI.md §2.12."
 else
-    message="🔁 🖧 ${HOST_LABEL} · 🧭 Drift compose
+    message="🔁 🐧 ${HOST_LABEL} · 🧭 Drift compose
 
 Tutti i container corrispondono di nuovo ai compose del repo."
 fi

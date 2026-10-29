@@ -180,32 +180,18 @@ func where(f finding) string {
 	return f.Name + " (" + f.Places + ")"
 }
 
-func linesOf(f finding) []string {
-	var lines []string
-	if f.Err != "" {
-		return []string{"ERRORE " + f.Name + ": " + f.Err}
-	}
-	note := ""
-	if f.Notes != "" {
-		note = "\n  note: " + f.Notes
-	}
-	if f.Safe != "" {
-		lines = append(lines, fmt.Sprintf("%s: %s → %s%s", where(f), f.Pin, f.Safe, note))
-	}
-	if f.NewDigest != "" {
-		lines = append(lines, fmt.Sprintf("%s: %s ricostruita (stesso tag, digest nuovo)%s", where(f), f.Pin, note))
-	}
-	if f.Major != "" {
-		lines = append(lines, fmt.Sprintf("🆕 nuova major: %s: %s → %s%s", where(f), f.Pin, f.Major, note))
-	}
-	return lines
+// report is one item of the message of a round: news about an image (Finding), or a
+// plain line (Rientrato, ERRORE).
+type report struct {
+	Finding *finding
+	Line    string
 }
 
 // nextState compares this round with the saved one. It returns the new state and the
-// lines to send (empty = silence).
-func nextState(prev releaseState, findings []finding) (releaseState, []string) {
+// reports to send (empty = silence).
+func nextState(prev releaseState, findings []finding) (releaseState, []report) {
 	next := releaseState{Images: map[string]record{}}
-	var lines []string
+	var lines []report
 
 	sorted := append([]finding(nil), findings...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Key < sorted[j].Key })
@@ -217,14 +203,19 @@ func nextState(prev releaseState, findings []finding) (releaseState, []string) {
 				if old.Err {
 					reason = "registro di nuovo raggiungibile"
 				}
-				lines = append(lines, fmt.Sprintf("Rientrato: %s (%s)", f.Name, reason))
+				lines = append(lines, report{Line: fmt.Sprintf("Rientrato: %s (%s)", f.Name, reason)})
 			}
 			continue
 		}
 		rec := recordOf(f)
 		next.Images[f.Key] = rec
 		if !seen || old != rec {
-			lines = append(lines, linesOf(f)...)
+			if f.Err != "" {
+				lines = append(lines, report{Line: "ERRORE " + f.Name + ": " + f.Err})
+			} else {
+				news := f // own copy: the report keeps a pointer
+				lines = append(lines, report{Finding: &news})
+			}
 		}
 	}
 
@@ -239,7 +230,7 @@ func nextState(prev releaseState, findings []finding) (releaseState, []string) {
 	}
 	sort.Strings(gone)
 	for _, key := range gone {
-		lines = append(lines, "Rientrato: "+key+" (pin cambiato o immagine tolta dal compose)")
+		lines = append(lines, report{Line: "Rientrato: " + key + " (pin cambiato o immagine tolta dal compose)"})
 	}
 	return next, lines
 }
@@ -253,21 +244,130 @@ func hasKey(findings []finding, key string) bool {
 	return false
 }
 
-func buildMessage(hostLabel string, lines []string) string {
-	const telegramMax = 4000 // the limit is 4096, with margin
-	msg := "⬆️ 🖧 " + hostLabel + " · 📦 Release immagini pinnate\n\n" + strings.Join(lines, "\n") +
-		"\n\nDa applicare a mano: note di rilascio, backup, dry-run, OK di Faginux."
-	if len(msg) > telegramMax {
-		cut := telegramMax
-		for cut > 0 && !isRuneStart(msg[cut]) { // never cut inside a UTF-8 sequence
-			cut--
+const (
+	telegramMax   = 4000 // the limit is 4096, with margin
+	maxPartRunes  = 600  // one block or line never gets longer than this
+	markerReserve = 100  // room for the "troncato" line
+)
+
+// htmlEscape is all that Telegram parse_mode=HTML needs for plain text.
+var htmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
+// clip cuts s to n runes, so it never cuts inside a UTF-8 sequence.
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+// fit joins whole parts while they fit in budget bytes. It returns the text and the
+// number of parts left out. A part is never cut: a cut could split an HTML entity or tag,
+// and Telegram refuses the whole message then.
+func fit(parts []string, sep string, budget int) (string, int) {
+	var b strings.Builder
+	for i, p := range parts {
+		add := len(p)
+		if i > 0 {
+			add += len(sep)
 		}
-		msg = msg[:cut] + "\n[...troncato, dettagli nel journal]"
+		if b.Len()+add > budget {
+			return b.String(), len(parts) - i
+		}
+		if i > 0 {
+			b.WriteString(sep)
+		}
+		b.WriteString(p)
+	}
+	return b.String(), 0
+}
+
+// imageBlock is the text for one image: what changed, and where the release notes are.
+func imageBlock(f finding) string {
+	var b strings.Builder
+	b.WriteString("📦 " + f.Name + " — " + f.Places)
+	if f.Safe != "" {
+		b.WriteString("\n   ⬆️ " + f.Pin + " → " + f.Safe)
+	}
+	if f.NewDigest != "" {
+		b.WriteString("\n   🔁 " + f.Pin + " ricostruita (stesso tag, digest nuovo)")
+	}
+	if f.Major != "" {
+		b.WriteString("\n   🆕 major " + f.Pin + " → " + f.Major + " (da valutare, non nel comando)")
+	}
+	if f.Notes != "" {
+		b.WriteString("\n   🔗 " + f.Notes)
+	}
+	return b.String()
+}
+
+// applyPrompt is the text that Faginux pastes in Claude Code. It stops before the deploy
+// (rule number one): Claude edits the pins and shows the diff and the dry run.
+// It is already HTML-escaped, for a <pre> block.
+func applyPrompt(todo []finding, budget int) string {
+	const intro = "Release-check: applica questi aggiornamenti ai pin, uno stack alla volta."
+	const outro = "Per ognuno: leggi le note di rilascio, controlla il backup, modifica il pin (tag e digest), " +
+		"mostrami il diff e `docker compose --dry-run up -d`. Poi fermati: il deploy lo faccio io, dopo il mio OK."
+	items := make([]string, 0, len(todo))
+	for _, f := range todo {
+		item := "- " + where(f) + ": "
+		if f.Safe != "" { // a new version makes a rebuild of the old tag useless
+			item += f.Pin + " → " + f.Safe
+		} else {
+			item += f.Pin + ", stesso tag, digest nuovo"
+		}
+		if f.Notes != "" {
+			item += " (note: " + f.Notes + ")"
+		}
+		items = append(items, htmlEscape.Replace(clip(item, maxPartRunes)))
+	}
+	list, omitted := fit(items, "\n", budget-len(intro)-len(outro)-markerReserve)
+	if omitted > 0 {
+		list += fmt.Sprintf("\n- ... altre %d immagini: vedi sopra", omitted)
+	}
+	return intro + "\n" + list + "\n" + outro
+}
+
+// buildMessage makes the Telegram text (HTML parse mode). A block per image, the plain
+// lines, then the prompt to paste. Only the blocks and lines are ever left out.
+func buildMessage(hostLabel string, reports []report) string {
+	var parts, plain []string
+	var todo []finding
+	hasMajor := false
+	for _, r := range reports {
+		if r.Finding == nil {
+			plain = append(plain, htmlEscape.Replace(clip(r.Line, maxPartRunes)))
+			continue
+		}
+		f := *r.Finding
+		parts = append(parts, htmlEscape.Replace(clip(imageBlock(f), maxPartRunes)))
+		if f.Safe != "" || f.NewDigest != "" {
+			todo = append(todo, f)
+		}
+		hasMajor = hasMajor || f.Major != ""
+	}
+	parts = append(parts, plain...)
+
+	head := "⬆️ 🐧 " + htmlEscape.Replace(hostLabel) + " · 📦 Release immagini pinnate"
+	tail := ""
+	switch {
+	case len(todo) > 0:
+		tail = "Per applicare, incolla in Claude Code (cartella homelab):\n<pre>" + applyPrompt(todo, telegramMax/2) + "</pre>"
+	case hasMajor:
+		tail = "Solo nuove major: nessun comando pronto, vanno valutate prima."
+	}
+
+	body, omitted := fit(parts, "\n\n", telegramMax-len(head)-len(tail)-markerReserve)
+	msg := head + "\n\n" + body
+	if omitted > 0 {
+		msg += fmt.Sprintf("\n\n[...troncato: altre %d voci, dettagli nel journal]", omitted)
+	}
+	if tail != "" {
+		msg += "\n\n" + tail
 	}
 	return msg
 }
-
-func isRuneStart(b byte) bool { return b&0xC0 != 0x80 }
 
 // scanAndEvaluate is the read-only part of a round.
 func scanAndEvaluate(ctx context.Context, repo fs.FS, cfg config, reg registry, logf func(string, ...any)) ([]finding, error) {

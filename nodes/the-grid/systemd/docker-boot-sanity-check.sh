@@ -45,5 +45,5 @@ if [ "${#problems[@]}" -gt 0 ]; then
     for p in "${problems[@]}"; do
         body="${body}${p}%0A"
     done
-    send_telegram "🔴 🖧 <b>${HOST_LABEL} · 🩺 Sanity check post-boot</b>%0A${body}"
+    send_telegram "🔴 🐧 <b>${HOST_LABEL} · 🩺 Sanity check post-boot</b>%0A${body}"
 fi

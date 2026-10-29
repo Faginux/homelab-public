@@ -31,7 +31,7 @@ updates=$(printf '%s\n' "$upgradable" | awk -F'[/ ]' '
 bot_token=$(tr -d '[:space:]' < "$TELEGRAM_DIR/bot_token")
 chat_id=$(tr -d '[:space:]' < "$TELEGRAM_DIR/chat_id")
 
-message="⬆️ 🖧 ${HOST_LABEL} · 📥 Aggiornamenti Docker
+message="⬆️ 🐧 ${HOST_LABEL} · 📥 Aggiornamenti Docker
 
 ${updates}
 

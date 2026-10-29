@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
+	"unicode/utf8"
 )
 
 // ---- fakes ----
@@ -353,11 +356,16 @@ func TestRoundNewVersionRebuildAndMajor(t *testing.T) {
 	msg := e.notify.sent[0]
 	for _, want := range []string{
 		"📦 Release immagini pinnate",
-		"bitwarden/lite (the-grid bitwarden): 2026.9.2 → 2026.10.0",
-		"note: https://example.test/bw",
-		"2026.9.2 ricostruita (stesso tag, digest nuovo)",
-		"🆕 nuova major: mariadb (the-grid bitwarden): 10.11.19 → 11.4.2",
-		"Da applicare a mano",
+		"📦 bitwarden/lite — the-grid bitwarden",
+		"⬆️ 2026.9.2 → 2026.10.0",
+		"🔗 https://example.test/bw",
+		"🔁 2026.9.2 ricostruita (stesso tag, digest nuovo)",
+		"📦 mariadb — the-grid bitwarden",
+		"🆕 major 10.11.19 → 11.4.2 (da valutare, non nel comando)",
+		"incolla in Claude Code",
+		"<pre>",
+		"- bitwarden/lite (the-grid bitwarden): 2026.9.2 → 2026.10.0 (note: https://example.test/bw)",
+		"il deploy lo faccio io",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("message misses %q:\n%s", want, msg)
@@ -365,6 +373,12 @@ func TestRoundNewVersionRebuildAndMajor(t *testing.T) {
 	}
 	if strings.Contains(msg, "rc1") {
 		t.Errorf("pre-release in message:\n%s", msg)
+	}
+	// The command holds the safe update only: a rebuild of the old tag is moot, and a
+	// major is for Faginux to decide.
+	command := msg[strings.Index(msg, "<pre>"):]
+	if strings.Contains(command, "stesso tag") || strings.Contains(command, "mariadb") {
+		t.Errorf("command holds more than the safe update:\n%s", command)
 	}
 
 	// Second round, same registry: silence.
@@ -450,11 +464,70 @@ func TestDryRunDoesNotSaveState(t *testing.T) {
 	}
 }
 
-func TestBuildMessageTruncatesOnRuneBoundary(t *testing.T) {
-	lines := []string{strings.Repeat("→", 3000)}
-	msg := buildMessage("the-grid", lines)
-	if !strings.Contains(msg, "[...troncato") {
-		t.Fatal("message not truncated")
+func newsReport(name string, safe string) report {
+	return report{Finding: &finding{Name: name, Places: "the-grid stack", Pin: "1.0.0", Safe: safe, Notes: "https://example.test/" + name}}
+}
+
+func TestBuildMessageLeavesWholePartsOutAndKeepsCommand(t *testing.T) {
+	var reports []report
+	for i := 0; i < 60; i++ {
+		reports = append(reports, newsReport(fmt.Sprintf("image-%02d", i), "1.1.0"))
+	}
+	msg := buildMessage("the-grid", reports)
+	if len(msg) > 4096 {
+		t.Errorf("message is %d bytes, Telegram takes 4096", len(msg))
+	}
+	for _, want := range []string{"[...troncato: altre ", "<pre>", "</pre>"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message misses %q", want)
+		}
+	}
+	if strings.Count(msg, "<pre>") != 1 || strings.Count(msg, "</pre>") != 1 {
+		t.Error("the pre block is not balanced")
+	}
+	if !utf8.ValidString(msg) {
+		t.Error("truncation cut inside a UTF-8 sequence")
+	}
+}
+
+func TestBuildMessageEscapesHTML(t *testing.T) {
+	msg := buildMessage("the-grid", []report{{Line: "ERRORE x: tags: <html> & co"}})
+	if !strings.Contains(msg, "ERRORE x: tags: &lt;html&gt; &amp; co") {
+		t.Errorf("error text not escaped:\n%s", msg)
+	}
+}
+
+func TestBuildMessageMajorOnlyHasNoCommand(t *testing.T) {
+	f := finding{Name: "tika", Places: "the-grid stack", Pin: "4.1.0", Major: "5.0.0"}
+	msg := buildMessage("the-grid", []report{{Finding: &f}})
+	if strings.Contains(msg, "<pre>") {
+		t.Errorf("a command for a major only:\n%s", msg)
+	}
+	if !strings.Contains(msg, "Solo nuove major") {
+		t.Errorf("no note about the majors:\n%s", msg)
+	}
+}
+
+func TestTelegramSendsHTMLParseMode(t *testing.T) {
+	var got url.Values
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		got = r.PostForm
+	}))
+	defer srv.Close()
+	tn := &telegramNotifier{botToken: "T", chatID: "1", http: srv.Client(), baseURL: srv.URL}
+	if err := tn.Send(context.Background(), "<pre>x</pre>"); err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("parse_mode") != "HTML" || got.Get("text") != "<pre>x</pre>" {
+		t.Errorf("form = %v", got)
+	}
+}
+
+func TestBuildMessageLongLineIsClipped(t *testing.T) {
+	msg := buildMessage("the-grid", []report{{Line: strings.Repeat("→", 3000)}})
+	if len(msg) > 4096 {
+		t.Fatalf("message is %d bytes", len(msg))
 	}
 	if strings.ContainsRune(msg, '\uFFFD') {
 		t.Error("truncation cut inside a UTF-8 sequence")

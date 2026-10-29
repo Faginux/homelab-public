@@ -134,7 +134,7 @@ func buildMessage(hostLabel string, lines []string) string {
 		footer += " Quando vuoi: prima `docker compose --dry-run up -d`, poi Deploy in Komodo."
 	}
 	legend = append(legend, footer)
-	msg := "ℹ️ 🖧 " + hostLabel + " · 🛡️ Gate CVE\n\n" + body + "\n\n" + strings.Join(legend, "\n")
+	msg := "ℹ️ 🐧 " + hostLabel + " · 🛡️ Gate CVE\n\n" + body + "\n\n" + strings.Join(legend, "\n")
 	if len(msg) > telegramMax {
 		msg = msg[:telegramMax] + "\n[...troncato, dettagli nel journal]"
 	}
