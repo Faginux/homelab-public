@@ -37,7 +37,9 @@ services:
     # informative only: with tag@digest Docker uses the digest. The label excludes
     # Watchtower. The operator updates the edge by hand,
     # by changing the digest after a test.
-    image: serfriz/caddy-cloudflare-ddns-crowdsec:2.11.4@sha256:29370832f2e3bf407ca627931fe0f9871586758784c35ffe11706e19c8fbd14e
+    # 2026-10-29: 2.11.4 -> 2.11.7 (notes of 2.11.5 to 2.11.7 read, the Caddyfile is valid
+    # with 2.11.7; the breaking change of the idle timeouts is set in the Caddyfile).
+    image: serfriz/caddy-cloudflare-ddns-crowdsec:2.11.7@sha256:659fc7f9ec7dad1c9bd711608b5fb64ff49a87e853d3890107d7aadc0a1bb0ab
     container_name: caddy
     restart: unless-stopped
     ports:

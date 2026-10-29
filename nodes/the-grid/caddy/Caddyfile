@@ -17,6 +17,15 @@
         servers {
                 trusted_proxies cloudflare
                 client_ip_headers Cf-Connecting-Ip
+
+                # Caddy 2.11.6 added a default of 1 minute for a stalled body read or
+                # response write. A phone upload to Immich can stall longer on a weak
+                # mobile network. 5 minutes is still stricter than before 2.11.6 (no
+                # limit). Chosen by Faginux on 2026-10-29.
+                timeouts {
+                        read_body_idle 5m
+                        write_idle 5m
+                }
         }
 
         # === Dynamic DNS ===
