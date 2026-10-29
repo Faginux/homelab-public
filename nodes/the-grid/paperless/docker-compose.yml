@@ -103,7 +103,9 @@ services:
     # apache/tika has no "major only" tag like postgres/redis/gotenberg.
     # It is either :latest (which now takes the major jumps in full) or a pinned
     # version. enable=false: the operator does the next bumps by hand after a test.
-    image: docker.io/apache/tika:4.1.0
+    # 2026-10-29: 4.1.0 -> 4.2.0 (notes read: breaking changes only in /unpack, in the
+    # config JSON and in the Java API; paperless uses none of them).
+    image: docker.io/apache/tika:4.2.0
     container_name: paperless-tika
     restart: unless-stopped
     labels:
@@ -119,7 +121,8 @@ services:
     # mandatory, a corrupt migration in 3.0.1, solved only in 3.0.2). There is no
     # official "minor only" tag to avoid the major jumps (see
     # discussion #12720 upstream). Do manual bumps with the changelog at hand.
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.3.1
+    # 2026-10-29: 3.3.1 -> 3.3.4 (notes read: dependency updates for the eMudhra CA incident).
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.3.4
     container_name: paperless-ngx
     restart: unless-stopped
     depends_on:

@@ -5,9 +5,10 @@
 #  does not send alerts: Beszel, komodo-watchdog and the "Ops" bot do that.
 #
 #  Decisions (read README.md for the reasons):
-#   - Image pinned to v2.5.0 by the digest of the multi-arch index (it
+#   - Image pinned to v2.7.0 by the digest of the multi-arch index (it
 #     contains linux/arm64). A tag can be published again, a digest cannot.
-#     Digest read on 2026-10-14 (PIANO-HOMEPAGE.md, P3).
+#     Digest read on 2026-10-29 (v2.5.0 -> v2.7.0, notes read: auth refactor,
+#     base image node 24; PIANO-HOMEPAGE.md, P3 for the first pin).
 #   - No Docker socket. Container state comes from the Komodo API.
 #   - Port on the Tailscale IP of the scope only, never 0.0.0.0. Docker must
 #     start after Tailscale: tailscale-wait-online in nodes/scope/systemd/
@@ -27,7 +28,7 @@
 
 services:
   homepage:
-    image: ghcr.io/gethomepage/homepage:v2.5.0@sha256:57c4a0531937889c0b968b120fe9c2560bbe036b5c9e18c49a9e2479de9975d1
+    image: ghcr.io/gethomepage/homepage:v2.7.0@sha256:19c5c09184458a41b7b5915e71463a39f36cd33540f41bdbed008791b8182d5f
     container_name: homepage
     restart: unless-stopped
     ports:

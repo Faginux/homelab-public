@@ -29,7 +29,8 @@
 
 services:
   umtk:
-    image: netplexflix/umtk:latest@sha256:19670657fc495df7d63b0705162be151dcfd5b1f8ebd14e33e89d968225fd4b8
+    # 2026-10-29: new digest of :latest (rebuilt image, no release notes found).
+    image: netplexflix/umtk:latest@sha256:25dd343f5aa7f8aeba92462632e810cc79686ea42da925c37ee2bece375d13ff
     container_name: umtk
     restart: "no"
     environment:

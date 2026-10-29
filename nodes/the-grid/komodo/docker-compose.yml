@@ -16,7 +16,7 @@
 #     ${VAR:?} that stops the start if the .env lacks it.
 #   - Bind mount on /srv/docker/komodo instead of named volumes. The backup
 #     (nodes/the-grid/backup) already covers all of /srv/docker.
-#   - PINNED images. Core 2.3.3 (latest release, 2026-09-01). Since v2,
+#   - PINNED images. Core 2.3.4 (updated on 2026-10-29). Since v2,
 #     upstream does not publish :latest any more. Mongo 8.0.32 (latest of the
 #     8.0 series at 2026-09-23). The official compose file uses "mongo" with no tag,
 #     today 8.3.x. Updates by hand. The label excludes Watchtower.
@@ -50,7 +50,8 @@ services:
       - docker-volume-backup.stop-during-backup=true
 
   core:
-    image: ghcr.io/moghtech/komodo-core:2.3.3
+    # 2026-10-29: 2.3.3 -> 2.3.4 (notes read: one dependency bump, the eMudhra root).
+    image: ghcr.io/moghtech/komodo-core:2.3.4
     container_name: komodo-core
     restart: unless-stopped
     # Required by v2 (release notes v2.0.0): it avoids zombie processes.

@@ -28,7 +28,8 @@ services:
     # For a "verified" backup service, "verified" counts more than "updated".
     # Nobody finds an archive that is silently empty or truncated until the restore.
     # 2026-10-14: v2.48.2 -> v2.49.1 (notes read: an SSH fix, dependencies, Go 1.27).
-    image: offen/docker-volume-backup:v2.49.1
+    # 2026-10-29: v2.49.1 -> v2.50.0 (notes read: only the GPG output format changed, we use age).
+    image: offen/docker-volume-backup:v2.50.0
     container_name: dvb-local
     restart: unless-stopped
     environment:

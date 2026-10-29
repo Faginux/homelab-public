@@ -97,10 +97,11 @@ services:
   #  1) LOCAL ARCHIVE
   # ---------------------------------------------------------------------------
   dvb-local:
-    # Pinned to v2.49.1 on 2026-10-14 (before :v2, updated by the Watchtower of V4,
+    # Pinned on 2026-10-14 (before :v2, updated by the Watchtower of V4,
     # now removed). The same rule as dvb-local on the-grid: for a backup, "checked"
     # is more important than "updated". New versions: PIANO-RELEASE-CHECK.md, manual update.
-    image: offen/docker-volume-backup:v2.49.1
+    # 2026-10-29: v2.49.1 -> v2.50.0 (notes read: only the GPG output format changed, we use age).
+    image: offen/docker-volume-backup:v2.50.0
     container_name: dvb-local
     restart: always
     env_file: ./backup-local.env
@@ -143,8 +144,8 @@ services:
   #  2) OFFSITE COPY TO the-grid
   # ---------------------------------------------------------------------------
   dvb-remote-the-grid:
-    # Pinned to v2.49.1 on 2026-10-14, refer to dvb-local.
-    image: offen/docker-volume-backup:v2.49.1
+    # Pinned on 2026-10-14, refer to dvb-local. 2026-10-29: v2.49.1 -> v2.50.0.
+    image: offen/docker-volume-backup:v2.50.0
     container_name: dvb-remote-the-grid
     restart: always
     env_file: ./backup-the-grid.env

@@ -26,7 +26,7 @@ services:
   # transcode, which runs in this container (ffmpeg).
   # ============================================================
   immich-server:
-    image: ghcr.io/immich-app/immich-server:v3.3.1
+    image: ghcr.io/immich-app/immich-server:v3.3.5
     container_name: immich-server
     restart: unless-stopped
     # Phase 1 (2026-10-14, PIANO-KOMODO-SECRETS-GATE.md §2b.3 B): no
@@ -35,7 +35,7 @@ services:
     # the ones that the container got from the .env. DB_PASSWORD is not there
     # (now a file). The variables that only compose uses are not there either
     # (COMPOSE_PROJECT_NAME, IMMICH_LIBRARY). Since 2026-10-26 the version is in
-    # the `image:` lines (v3.3.1), not in IMMICH_VERSION. The release-check job
+    # the `image:` lines (v3.3.5), not in IMMICH_VERSION. The release-check job
     # reads the pins from the compose (PIANO-RELEASE-CHECK.md, R2-a).
     environment:
       TZ: ${TZ}
@@ -90,7 +90,7 @@ services:
   # Model cache in a named volume (~1GB, downloaded at the first start)
   # ============================================================
   immich-machine-learning:
-    image: ghcr.io/immich-app/immich-machine-learning:v3.3.1-cuda
+    image: ghcr.io/immich-app/immich-machine-learning:v3.3.5-cuda
     container_name: immich-machine-learning
     restart: unless-stopped
     # Phase 1: from the .env, the ML used only TZ.
