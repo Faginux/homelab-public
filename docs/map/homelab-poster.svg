@@ -411,7 +411,7 @@
 <text x="1208.66666666667" y="1448" font-family="'Segoe UI', Inter, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#E6F1FF" text-anchor="start">Galaxy Tab S5e</text>
 <text x="1208.66666666667" y="1466" font-family="'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="10.5" font-weight="400" fill="#8FB8CC" text-anchor="start">WI-FI</text>
 <line x1="50" y1="1509" x2="1410" y2="1509" stroke="#2B6680" stroke-width="1"/>
-<text x="50" y="1541" font-family="'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="12" font-weight="400" fill="#8FB8CC" text-anchor="start" letter-spacing="1">29 OCT 2026 · POSTER UPDATED</text>
+<text x="50" y="1541" font-family="'Cascadia Mono', Consolas, 'DejaVu Sans Mono', monospace" font-size="12" font-weight="400" fill="#8FB8CC" text-anchor="start" letter-spacing="1">30 OCT 2026 · POSTER UPDATED</text>
 <text x="730" y="1541" font-family="'Segoe UI', Inter, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8FB8CC" text-anchor="middle">Made from docs/map/inventory.psd1 · routes and media flow: homelab-map.drawio</text>
 <text x="1410" y="1541" font-family="'Segoe UI', Inter, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="400" fill="#8FB8CC" text-anchor="end">Private addresses hidden</text>
 </svg>

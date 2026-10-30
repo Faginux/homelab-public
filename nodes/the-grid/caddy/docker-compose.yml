@@ -78,7 +78,9 @@ services:
     # We removed Watchtower on the-grid on 14/10 (PIANO-KOMODO-SECRETS-GATE.md, Phase 4).
     # The caddy stack stays outside Komodo. Update it by hand, like Caddy:
     # new tag + digest, dry-run, recreate with the OK of the operator.
-    image: crowdsecurity/crowdsec:v1.8.1@sha256:0f2523fa61ef507f15d953045cface490cc880670c62f2755ced17524107f71a
+    # 2026-10-30: v1.8.1 -> v1.8.2 (notes read: no breaking change; the file datasource, the only one
+    # we use, gets a fix for half-written lines).
+    image: crowdsecurity/crowdsec:v1.8.2@sha256:65b74942f7e7ed5c60fde4ac15fc4ba715904c398c8b16dd451f4907d90347d4
     container_name: crowdsec
     restart: unless-stopped
     volumes:

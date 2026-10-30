@@ -122,7 +122,9 @@ services:
     # official "minor only" tag to avoid the major jumps (see
     # discussion #12720 upstream). Do manual bumps with the changelog at hand.
     # 2026-10-29: 3.3.1 -> 3.3.4 (notes read: dependency updates for the eMudhra CA incident).
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.3.4
+    # 2026-10-30: 3.3.4 -> 3.4.0 (notes read: ImageMagick removed, PDF thumbnails now use poppler;
+    # PAPERLESS_CONVERT_* are deprecated and we set none; no new DB migration).
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.4.0
     container_name: paperless-ngx
     restart: unless-stopped
     depends_on:
