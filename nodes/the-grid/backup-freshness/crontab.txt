@@ -1,0 +1,12 @@
+# Fragment of the user crontab (ops) on the-grid for the backup freshness check.
+# The real crontab also has the restart of flaresolverr, the Bitwarden dump and bw_sync:
+# one crontab for each user, documented in pieces for each folder. Check with `crontab -l`.
+#
+# Every day at 08:40 (the-grid is in Europe/Rome). Chosen on 2026-11-03 with the real inventory
+# of the three hosts (CALENDARIO-OPERAZIONI.md). The job runs after the .sha256 manifest
+# (03:40), the pull of V4 (05:40), cron.daily (06:25), komodo-gate (07:45) and release-check
+# (08:05). It stays away from :17 (cron.hourly) and :30 (network check). It reads only file
+# times and sizes (less than 1 s), so it does not touch the jobs that write the archives.
+# It runs from the clone of the repo: no installed copy to keep aligned.
+# Output goes to journald (journalctl -t backup-freshness), no log file to rotate.
+40 8 * * * /home/ops/github/homelab/nodes/the-grid/backup-freshness/check-backup-freshness.sh 2>&1 | /usr/bin/logger -t backup-freshness
