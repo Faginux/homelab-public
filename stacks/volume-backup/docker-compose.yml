@@ -77,6 +77,19 @@
 #  already corrupted archives. A write of 2.5 GB to it each Sunday at 05:00 was
 #  no longer useful. V4 keeps two copies: dvb-local and dvb-remote-the-grid.
 #  The references to dvb-remote-scope in the notes above are history, not code.
+#
+#  FIXED (2026-11-03): v2.50.0 checks the SSH host key. v2.49.1 did not. The
+#  release notes do not tell about this change. Without SSH_HOST_PUBLIC_KEY or
+#  SSH_KNOWN_HOSTS_FILE, each run stops before the upload with "SSH hostname
+#  given without a public key or known_hosts". The run of 2026-11-01 failed in
+#  this way. The error comes before the script starts, so probably no Telegram
+#  message went out (not verified). dvb-remote-the-grid now reads
+#  ssh/known_hosts_the-grid (not in git, like the key). The file has all three host
+#  keys of the-grid (ed25519, ecdsa, rsa), so the check works for each key type
+#  that the client agrees on. The keys came from two channels that agree: the
+#  .pub files on the-grid and the known_hosts of V4. Test of 2026-11-03: a wrong key
+#  gives "knownhosts: key mismatch", the correct file gives an upload.
+#  Procedure to make the file again: README, "Host key of the-grid".
 # =============================================================================
 
 # Exclusions shared by the two services. They are here since 2026-10-02 (before,
@@ -101,6 +114,7 @@ services:
     # now removed). The same rule as dvb-local on the-grid: for a backup, "checked"
     # is more important than "updated". New versions: PIANO-RELEASE-CHECK.md, manual update.
     # 2026-10-29: v2.49.1 -> v2.50.0 (notes read: only the GPG output format changed, we use age).
+    # The notes did not tell about the new SSH host key check (dvb-remote-the-grid only, 2026-11-03).
     image: offen/docker-volume-backup:v2.50.0
     container_name: dvb-local
     restart: always
@@ -145,6 +159,7 @@ services:
   # ---------------------------------------------------------------------------
   dvb-remote-the-grid:
     # Pinned on 2026-10-14, refer to dvb-local. 2026-10-29: v2.49.1 -> v2.50.0.
+    # v2.50.0 needs the host key of the-grid: refer to the note of 2026-11-03 in the header.
     image: offen/docker-volume-backup:v2.50.0
     container_name: dvb-remote-the-grid
     restart: always
@@ -153,6 +168,8 @@ services:
       BACKUP_EXCLUDE_REGEXP: *backup-exclude
       # age encryption, refer to the note of 2026-10-02 in the header
       AGE_PUBLIC_KEYS: "age1khzlxt53uvcdfhyj0zka0w3k25ns9pnqlxyn2lnq6ktyrd4ln5usjfflfy"
+      # host key check of the-grid (since v2.50.0), refer to the note of 2026-11-03
+      SSH_KNOWN_HOSTS_FILE: /ssh/known_hosts_the-grid
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
@@ -169,6 +186,11 @@ services:
       - type: bind
         source: "S:/github/homelab/stacks/volume-backup/ssh/id_ed25519_the-grid"
         target: /ssh/id_ed25519_the-grid
+        read_only: true
+      # --- host keys of the-grid (read only), a public file, not in git ---
+      - type: bind
+        source: "S:/github/homelab/stacks/volume-backup/ssh/known_hosts_the-grid"
+        target: /ssh/known_hosts_the-grid
         read_only: true
 
       # --- SOURCES: identical to dvb-local ---

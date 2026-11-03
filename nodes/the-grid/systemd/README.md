@@ -460,3 +460,56 @@ systemctl show komodo-gate.service -p Result,ExecMainStatus  # success / 0
 journalctl -u komodo-gate -n 30 --no-pager                   # un esito per servizio
 ls -la /var/lib/komodo-gate/                                 # state.json di ops
 ```
+
+## Release check of the pinned images — `release-check.*`
+
+The code, the choices and the tests are in `tools/release-check/README.md`
+(`PIANO-RELEASE-CHECK.md`). This section has only the installation.
+
+The timer runs every morning at **08:05**. This is 20 minutes after the CVE gate (07:45). The tool
+reads the `image:` lines of the compose files in the clone of the repo on the-grid. It asks the public
+registries for newer versions. It sends a Telegram message only when something changes. **It never
+pulls and never deploys.** It starts no container. One round takes about 2 minutes. Most of this time
+is for the tag pages of `ghcr.io/immich-app`.
+
+| File | Real destination on the-grid | Permissions |
+|---|---|---|
+| binary `release-check`. Build it on ARCADE (read the README of the tool). | `/usr/local/bin/release-check` | `755`, root |
+| `release-check.service` | `/etc/systemd/system/release-check.service` | `644`, root |
+| `release-check.timer` | `/etc/systemd/system/release-check.timer` | `644`, root |
+
+The tool needs no new secret. It reads only `/srv/docker/_secrets/telegram/` (`bot_token`,
+`chat_id`). The unit runs as `ops`. The tool keeps its state in
+`/var/lib/release-check/state.json` (`StateDirectory=`).
+
+### Activation
+
+First copy the binary to `/tmp/release-check` with `scp` (read the README of the tool). To test
+first, run the tool with `-dry-run`: it prints the message, sends nothing and saves no state. Then
+run:
+
+```bash
+sudo install -m 755 -o root -g root /tmp/release-check /usr/local/bin/release-check && rm /tmp/release-check
+cd ~/github/homelab/nodes/the-grid/systemd
+sudo install -m 644 -o root -g root release-check.service release-check.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now release-check.timer
+sudo systemctl start release-check.service   # real run now: first message with all the open updates
+```
+
+### Verification
+
+```bash
+systemctl list-timers release-check.timer                      # next run: 08:05
+systemctl show release-check.service -p Result,ExecMainStatus   # success / 0
+journalctl -u release-check -n 40 --no-pager                    # see the lines below
+ls -la /var/lib/release-check/                                  # state.json of ops
+```
+
+In the journal, `nothing new: no message` means no change. `telegram message sent (N items)` means
+a change. The lines `news <image>` stay in the journal every day while an update is open. This is
+normal: the tool sends each result only once.
+
+A new build does not have the same sha256 as the installed file. Go writes the Git revision of the
+repo (`vcs.revision`) into the binary. To find the source of an installed binary, copy it to a
+machine with Go. Then run `go version -m <file>` and read `vcs.revision` and `vcs.modified`.

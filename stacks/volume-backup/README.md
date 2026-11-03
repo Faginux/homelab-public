@@ -118,6 +118,51 @@ $ultimo = Get-ChildItem "S:\Bakcup_Servarr+\Docker Volumes\arcade-volumes-*.tar.
 tar -tzf $ultimo.FullName | Select-Object -First 40
 ```
 
+`docker exec dvb-remote-the-grid backup` also stops `cleanuparr` during the run: it has the
+label `docker-volume-backup.stop-during-backup`. To test only the SSH upload, use a
+one-off container with `--entrypoint backup`, a small source and no `docker.sock`.
+
+## Host key of the-grid
+
+Since v2.50.0, `dvb-remote-the-grid` checks the host key of the-grid. Without the check data, each run
+stops before the upload with "SSH hostname given without a public key or known_hosts".
+The container reads `ssh/known_hosts_the-grid` (`SSH_KNOWN_HOSTS_FILE` in `docker-compose.yml`). The
+file is not in git, as the key. It has all three host keys of the-grid (ed25519, ecdsa, rsa), so the
+check works for each key type. Make the file again when the-grid gets new host keys (for example,
+after a reinstall).
+
+Do these steps on ARCADE, in PowerShell 7, in the folder
+`S:\github\homelab\stacks\volume-backup`:
+
+1. Write the file from the host keys on the disk of the-grid:
+
+   ```powershell
+   $lines = ssh the-grid 'for f in /etc/ssh/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ecdsa_key.pub /etc/ssh/ssh_host_rsa_key.pub; do awk "{print \"192.0.2.20 \" \$1 \" \" \$2}" "$f"; done'
+   [IO.File]::WriteAllText("$PWD\ssh\known_hosts_the-grid", (($lines | ForEach-Object { $_.TrimEnd("`r") }) -join "`n") + "`n")
+   ```
+
+2. Show the fingerprints of the file:
+
+   ```powershell
+   ssh-keygen -lf ssh\known_hosts_the-grid
+   ```
+
+   Result: three lines, ED25519, ECDSA and RSA.
+3. Compare each fingerprint with a second channel. Use the `known_hosts` of V4
+   (`ssh-keygen -F 192.0.2.20 -l -f $HOME\.ssh\known_hosts`) or the console of the-grid
+   (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`). If one fingerprint is different, stop.
+4. Make the container again. This is a state change: get the OK of Faginux first.
+
+   ```powershell
+   docker compose --dry-run up -d --no-deps dvb-remote-the-grid
+   docker compose up -d --no-deps dvb-remote-the-grid
+   ```
+
+   Result: the log shows `Successfully scheduled backup`.
+
+Never use `SSH_IGNORE_HOST_KEY`. Test of 2026-11-03: a wrong key gives
+`knownhosts: key mismatch`, the correct file gives an upload.
+
 ## Restore
 
 The archive is a normal `tar.gz`. You need no proprietary tool.
