@@ -124,7 +124,11 @@ services:
     # 2026-10-29: 3.3.1 -> 3.3.4 (notes read: dependency updates for the eMudhra CA incident).
     # 2026-10-30: 3.3.4 -> 3.4.0 (notes read: ImageMagick removed, PDF thumbnails now use poppler;
     # PAPERLESS_CONVERT_* are deprecated and we set none; no new DB migration).
-    image: ghcr.io/paperless-ngx/paperless-ngx:3.4.0
+    # 2026-11-04: 3.4.0 -> 3.4.2 (notes of 3.4.1 and 3.4.2 read: bug fixes and dependency
+    # updates only, no DB migration, no breaking change, no new setting. 3.4.2 makes the
+    # index init wait for the Tesseract language install). The pin now has a digest: it is
+    # the digest of the multi-arch index, read from the registry on 2026-11-04.
+    image: ghcr.io/paperless-ngx/paperless-ngx:3.4.2@sha256:d704e84f88300eb6ab001ab15720a2330ff99169cf9f94d6b8fcc44b63a84c84
     container_name: paperless-ngx
     restart: unless-stopped
     depends_on:
