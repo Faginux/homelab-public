@@ -118,6 +118,26 @@
                 reverse_proxy 198.51.100.20:5055
         }
 
+        # Caveau API (Supabase, stack nodes/the-grid/caveau). Public since
+        # 2026-11-06 (decision D6 of Faginux: Cloudflare proxy and CrowdSec). Only the
+        # four API paths of the app pass. The admin API of Auth and the S3 protocol of
+        # Storage get 404, and so do Studio, /pg/ and all the other paths.
+        @caveau host caveau-api.homelab.example
+        handle @caveau {
+                crowdsec
+                @caveau_blocked path /auth/v1/admin/* /storage/v1/s3/*
+                handle @caveau_blocked {
+                        respond "Not found" 404
+                }
+                @caveau_app path /auth/v1/* /rest/v1/* /storage/v1/* /functions/v1/*
+                handle @caveau_app {
+                        reverse_proxy 198.51.100.20:8020
+                }
+                handle {
+                        respond "Not found" 404
+                }
+        }
+
         # Immich - public since 2026-10-27 (Faginux), for the phone backup with no
         # VPN. DNS only (grey cloud): the record holds the public IP of the home,
         # and the dynamic_dns block above keeps it current. The Cloudflare proxy

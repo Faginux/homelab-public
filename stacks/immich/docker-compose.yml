@@ -97,6 +97,9 @@ services:
     environment:
       TZ: ${TZ}
       MACHINE_LEARNING_DEVICE_TYPE: cuda
+      # Unload the models after 60 s with no request (default 300 s). Then the
+      # worker stops and the GPU gets the VRAM back (PLAN-LOCAL-LLM.md, M1b-A).
+      MACHINE_LEARNING_MODEL_TTL: 60
     volumes:
       - immich-model-cache:/cache
     networks:

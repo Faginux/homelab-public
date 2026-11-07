@@ -17,6 +17,7 @@ set -euo pipefail
 SOURCES=(
     "/srv/backup/docker-volumes|*.tar.gz.age"
     "/srv/backup/bitwarden-dumps|*.sql.gz"
+    "/srv/backup/caveau-dumps|caveau_*.age"
 )
 # A file touched in the last MIN_AGE_MIN minutes can still be in writing (a dvb
 # started by hand). The hash of a half-written archive would never match.

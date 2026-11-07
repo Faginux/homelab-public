@@ -74,6 +74,15 @@ $Sources = @(
         MaxAgeDays = 8      # weekly dump
         Optional   = $true  # the folder on the-grid comes with Part B
     }
+    [pscustomobject]@{
+        Name       = 'caveau-dumps'
+        Remote     = '/caveau-dumps'
+        Local      = 'S:\Bakcup_Servarr+\from-the-grid\caveau'
+        Pattern    = 'caveau_*.age'   # database and photos of the Caveau app
+        Kind       = 'age'
+        MaxAgeDays = 2      # daily backup at 01:15
+        Optional   = $true  # the folder on the-grid comes with the first start of caveau
+    }
 )
 
 function Get-ArchiveTimestamp {

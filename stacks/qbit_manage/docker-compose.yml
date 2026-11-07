@@ -9,14 +9,12 @@
 #  S:\Bakcup_Servarr+\Docker yml\qbit_manage\). The project name did not change
 #  (COMPOSE_PROJECT_NAME=qbit_manage). The data moved to S:/docker-appdata.
 #
-#  ⚠️ TEMPORARY STATE since 2026-09-30 -- a deviation to remove.
-#    The flag is QBT_SKIP_QB_VERSION_CHECK=true.
-#    qbit_manage refuses a qBittorrent newer than the version that its library
-#    `qbittorrent-api` declares (it was v5.2.3). qBittorrent 5.2.4 came out on
-#    2026-09-28. The flag makes it a WARN.
-#  When the Telegram alert of QbitCompat-Check tells that upstream supports the
-#  installed version: remove the flag, then `docker compose pull` and (after
-#  confirmation) `up -d`. Details: PROBLEMI-E-SOLUZIONI.md, §13.2.
+#  Version check: from 2026-09-30 to 2026-11-07 the flag
+#    QBT_SKIP_QB_VERSION_CHECK=true was on. qbit_manage refuses a qBittorrent
+#    newer than the version that its library `qbittorrent-api` declares. Upstream
+#    now supports 5.2.4, so the flag is removed (2026-11-07). If a new qBittorrent
+#    release comes out first, the container can stop with exit 1: QbitCompat-Check
+#    tells it by Telegram. Details: PROBLEMI-E-SOLUZIONI.md, §13.2.
 #
 #  Restart policy: `unless-stopped` since 2026-10-06. From 2026-09-30 it was
 #  "no", because `always` starts again, at a Docker Desktop restart, also a
@@ -78,9 +76,6 @@ services:
       - QBT_RUN=false
       - QBT_SCHEDULE=10
       - QBT_DRY_RUN=false
-      # TEMPORARY, refer to the header. Name checked in upstream qbit_manage.py:
-      # get_arg("QBT_SKIP_QB_VERSION_CHECK", ..., arg_bool=True)
-      - QBT_SKIP_QB_VERSION_CHECK=true
       - QBT_TAG_UPDATE=true
       - QBT_SHARE_LIMITS=true
       - QBT_RECHECK=false

@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 <#
-  Invoke-KometaRun.ps1  -  v1.3  (2026-09-28).
+  Invoke-KometaRun.ps1  -  v1.4  (2026-11-05).
   The ONLY place from which Kometa starts automatically. It is an exception to
   the "Regola numero uno" (rule number one) that the operator authorized (refer
   to the CLAUDE.md of the repo). The Scheduled Tasks start it through
@@ -36,6 +36,12 @@
   imported episode updates "IT A" / "IT S.." immediately. If it fails: Telegram,
   and Kometa uses the files of the previous run.
 
+  v1.4 (2026-11-05) - IMDb Top 250 position ("#32") in the rating badge. Before
+  Kometa it starts New-ImdbRankOverlay.ps1 (Kometa IMDb service + Plex API
+  reads, no container, a few seconds). It does this in Full and in each Quick
+  run: all four libraries have the badge. If it fails: Telegram, and Kometa
+  uses the files of the previous run.
+
   Made with Claude Code (Anthropic).
 #>
 [CmdletBinding()]
@@ -49,7 +55,7 @@ $RunLogDir    = 'S:\docker-appdata\kometa\run-logs'
 $RequestFile  = Join-Path $RunLogDir 'quick-request.json'
 $SummaryLog   = Join-Path $RunLogDir 'kometa-runs.ndjson'
 $TelegramCfg  = 'S:\Scripts\Tmm\telegram.config.psd1'
-$KeepRunLogs  = 45           # each night there are 2 logs now (tssk + full)
+$KeepRunLogs  = 75           # each night there are 4 logs now (tssk + ita + rank + full)
 $MutexName    = 'Global\KometaRun'
 $Image        = 'kometateam/kometa'
 $PinnedMajor  = 2
@@ -172,6 +178,23 @@ function Invoke-ItaOverlay {
     return @{ itaStatus = $(if ($code -eq 0) { 'ok' } else { 'error' }); itaDurationSec = $dur; itaLog = $itaLog; itaTelegram = $tg }
 }
 
+function Invoke-RankOverlay {
+    # Makes config/overlays-custom/imdb-rank-*.yml again. A separate process,
+    # as for Invoke-ItaOverlay.
+    $rankLog = Join-Path $RunLogDir ("{0}-rank.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $t0 = Get-Date
+    & pwsh -NoProfile -File (Join-Path $StackDir 'New-ImdbRankOverlay.ps1') 2>&1 |
+        ForEach-Object { "$_" } | Where-Object { $_ -notmatch '(?i)token' } |
+        Set-Content -LiteralPath $rankLog -Encoding UTF8
+    $code = $LASTEXITCODE
+    $dur = [int]((Get-Date) - $t0).TotalSeconds
+    $tg = $null
+    if ($code -ne 0) {
+        $tg = Send-Telegram ("`u{26A0} `u{1F5A5} ARCADE `u{00B7} `u{1F3C6} Posizione Top 250 IMDb`nFALLITA, exit $code. Kometa usa i file del giro prima.`nLog: $rankLog")
+    }
+    return @{ rankStatus = $(if ($code -eq 0) { 'ok' } else { 'error' }); rankDurationSec = $dur; rankLog = $rankLog; rankTelegram = $tg }
+}
+
 function Read-RequestedLibraries {
     if (-not (Test-Path -LiteralPath $RequestFile)) { return @() }
     try { return @((Get-Content -LiteralPath $RequestFile -Raw | ConvertFrom-Json).libraries | Where-Object { $_ }) }
@@ -192,6 +215,7 @@ try {
     $libraries = @()
     $tssk = $null
     $ita = $null
+    $rank = $null
     if ($Mode -eq 'Quick') {
         $libraries = @(Read-RequestedLibraries | Sort-Object -Unique)
         if ($libraries.Count -eq 0) { Remove-Item -LiteralPath $RequestFile -ErrorAction SilentlyContinue; exit 0 }
@@ -199,10 +223,12 @@ try {
         Remove-Item -LiteralPath $RequestFile -ErrorAction SilentlyContinue
         $kometaArgs = @('--run-libraries', ($libraries -join '|'), '--overlays-only')
         if ($libraries | Where-Object { $_ -in 'Serie TV', 'Anime' }) { $ita = Invoke-ItaOverlay }
+        $rank = Invoke-RankOverlay
     } else {
         $kometaArgs = @('--run')
         $tssk = Invoke-TsskRefresh
         $ita = Invoke-ItaOverlay
+        $rank = Invoke-RankOverlay
     }
 
     $stamp  = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -255,6 +281,7 @@ try {
     }
     if ($tssk) { foreach ($k in $tssk.Keys) { $summary[$k] = $tssk[$k] } }
     if ($ita)  { foreach ($k in $ita.Keys)  { $summary[$k] = $ita[$k] } }
+    if ($rank) { foreach ($k in $rank.Keys) { $summary[$k] = $rank[$k] } }
     Write-Summary $summary
 
     Get-ChildItem -LiteralPath $RunLogDir -Filter '*.log' | Sort-Object LastWriteTime -Descending |

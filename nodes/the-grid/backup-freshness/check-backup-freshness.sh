@@ -44,6 +44,8 @@ CHECKS=(
     "offsite-v4|/srv/backup/from-arcade|arcade-volumes-*.tar.gz.age|192|Copia offsite di ARCADE (dvb-remote-the-grid, dom 06:00)"
     "volumes-the-grid|/srv/backup/docker-volumes|the-grid-volumes-*.tar.gz.age|96|Backup volumi di the-grid (dvb-local, mar+ven 03:00)"
     "bitwarden|/srv/backup/bitwarden-dumps|bitwarden_vault_*.sql.gz|192|Dump Bitwarden (dom 02:45)"
+    "caveau-db|/srv/backup/caveau-dumps|caveau_db_*.sql.gz.age|48|Dump database Caveau (giornaliero 01:15)"
+    "caveau-foto|/srv/backup/caveau-dumps|caveau_storage_*.tar.gz.age|48|Foto Caveau (giornaliero 01:15)"
 )
 
 DRY_RUN=0
