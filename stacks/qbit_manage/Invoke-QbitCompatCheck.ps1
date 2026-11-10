@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 <#
-  Invoke-QbitCompatCheck.ps1  -  v1.0  (2026-09-30).
+  Invoke-QbitCompatCheck.ps1  -  v1.1  (2026-11-08, v1.0 2026-09-30).
   Daily compatibility check qBittorrent <-> qbit_manage, with a Telegram
   alert. The Scheduled Task QbitCompat-Check (09:20) starts it through
   Invoke-QbitCompatCheck.vbs (no console flash). Read only: it does not touch
@@ -15,8 +15,11 @@
   It compares three versions.
     installed   qBittorrent exe (C:\Program Files\qBittorrent).
     latest      GitHub qbittorrent/qBittorrent, most recent stable release.
-    supported   SUPPORTED_VERSIONS.json, master branch of qbit_manage. It follows
-                the stable release. Renovate updates it automatically.
+    supported   the limit that the running container declares in its log
+                ("supported versions: vA - vB"). If the log has no such line,
+                SUPPORTED_VERSIONS.json (master branch of qbit_manage). The file
+                can be late: on 2026-11-08 it said 5.2.4 while the image
+                already accepted 5.3.0 (false "Broken" alert).
 
   It sends a Telegram alert ONLY when the scenario changes (state in $StateFile).
   It sends it only if there is something to do.
@@ -54,6 +57,7 @@ $TelegramCfg   = 'S:\Scripts\Tmm\telegram.config.psd1'
 $QbitExe       = 'C:\Program Files\qBittorrent\qbittorrent.exe'
 $SupportedUrl  = 'https://raw.githubusercontent.com/StuffAnThings/qbit_manage/master/SUPPORTED_VERSIONS.json'
 $ReleaseUrl    = 'https://api.github.com/repos/qbittorrent/qBittorrent/releases/latest'
+$ContainerName = 'qbit_manage'
 $FailuresBeforeAlert = 3
 $Header        = "`u{1F5A5} ARCADE `u{00B7} qbit_manage"
 
@@ -95,6 +99,21 @@ function Get-SupportedQbitVersion {
         $r = Invoke-WebRequest -Uri $SupportedUrl -TimeoutSec 20 -ErrorAction Stop `
             -Headers @{ 'User-Agent' = 'homelab-qbit-compat-check' }
         return ConvertTo-QbitVersion ($r.Content | ConvertFrom-Json).master.qbit   # for example "v5.2.3"
+    } catch { return $null }
+}
+
+function Get-ContainerSupportedQbitVersion {
+    # The running image declares its own limit in the log of each run:
+    #   "qbit_manage supported versions: v4.3.0 - v5.3.0"
+    # This is the real limit. The file on master can be late (2026-11-08).
+    [CmdletBinding()]
+    [OutputType([version])]
+    param()
+    try {
+        $lines = docker logs --since 2h $ContainerName 2>&1 |
+            Select-String -Pattern 'supported versions:\s*v?[\d.]+\s*-\s*v?([\d.]+)'
+        if (-not $lines) { return $null }
+        return ConvertTo-QbitVersion $lines[-1].Matches[0].Groups[1].Value
     } catch { return $null }
 }
 
@@ -173,7 +192,8 @@ if ($SelfTest) {
         @('5.2.4', '5.2.4', '5.2.4', $true,  'CanRemoveBypass'),  # upstream caught up
         @('5.2.4', '5.3.0', '5.2.4', $false, 'Hold'),             # release not supported yet
         @('5.2.3', '5.2.4', '5.2.4', $false, 'SafeToUpdate'),     # supported release
-        @('5.2.4', '5.2.4', '5.2.4', $false, 'Ok')                # all aligned
+        @('5.2.4', '5.2.4', '5.2.4', $false, 'Ok'),               # all aligned
+        @('5.3.0', '5.3.0', '5.3.0', $false, 'Ok')                # limit read from the container log (2026-11-08)
     )
     $failed = 0
     foreach ($c in $cases) {
@@ -199,7 +219,8 @@ $failures = [int]$state.failures
 
 $installed = Get-InstalledQbitVersion
 $latest    = Get-LatestQbitVersion
-$supported = Get-SupportedQbitVersion
+# The limit that the running container declares wins over the file on master.
+$supported = (Get-ContainerSupportedQbitVersion) ?? (Get-SupportedQbitVersion)
 $bypass    = Test-BypassEnabled
 
 # --- source not reachable: count the failures, alert only at the threshold ---

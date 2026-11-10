@@ -6,9 +6,10 @@
 #  its own Glances. ARCADE already has one (a Windows service).
 #
 #  Decisions:
-#   - Image pinned to 4.5.8-full by the digest of the multi-arch index (it
+#   - Image pinned to 4.5.9-full by the digest of the multi-arch index (it
 #     contains linux/amd64). A tag can be published again, a digest cannot.
-#     Digest read from the registry on 2026-10-14.
+#     Digest read from the registry on 2026-11-08. 4.5.9 is the last 4.x
+#     release (5.0 is in beta).
 #   - Port on the Tailscale IP of the-grid only, never 0.0.0.0. Glances has no
 #     authentication here, and its API shows the host name, the system and
 #     the addresses. Docker must start after Tailscale: the unit
@@ -27,7 +28,7 @@
 
 services:
   glances:
-    image: nicolargo/glances:4.5.8-full@sha256:63823bf68687b42afab3bced830d1f157447c0204476cb7a62cb1e5e65dc292c
+    image: nicolargo/glances:4.5.9-full@sha256:0b309652e8a4f2e827b823609044b9976b309765517760c0383d2e4f73f756c5
     container_name: glances
     restart: unless-stopped
     environment:

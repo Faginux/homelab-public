@@ -41,7 +41,9 @@ services:
     # with 2.11.7; the breaking change of the idle timeouts is set in the Caddyfile).
     # 2026-11-02: new digest for the same tag 2.11.7. It is the monthly rebuild of
     # 2026-11-01 (no new Caddy release). The digest before was 659fc7f9.
-    image: serfriz/caddy-cloudflare-ddns-crowdsec:2.11.7@sha256:361310ad8f19933e4a2193cb38898e9f5054434046e33a08c20ded26fce998a4
+    # 2026-11-10: 2.11.7 -> 2.11.9 (notes of 2.11.8 and 2.11.9 read). Hosts with "/" or
+    # "\" or only dots get 400 on all protocols. Fixes for FastCGI only (not used here).
+    image: serfriz/caddy-cloudflare-ddns-crowdsec:2.11.9@sha256:33723f9d6b83db205817a84e3551300edaeea37ad0d20f5b55e3c579dc7df655
     container_name: caddy
     restart: unless-stopped
     ports:

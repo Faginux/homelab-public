@@ -114,8 +114,9 @@ services:
     # now removed). The same rule as dvb-local on the-grid: for a backup, "checked"
     # is more important than "updated". New versions: PIANO-RELEASE-CHECK.md, manual update.
     # 2026-10-29: v2.49.1 -> v2.50.0 (notes read: only the GPG output format changed, we use age).
+    # 2026-11-08: v2.50.0 -> v2.50.1 (notes read: only an SSH host key algorithm fix).
     # The notes did not tell about the new SSH host key check (dvb-remote-the-grid only, 2026-11-03).
-    image: offen/docker-volume-backup:v2.50.0
+    image: offen/docker-volume-backup:v2.50.1
     container_name: dvb-local
     restart: always
     env_file: ./backup-local.env
@@ -158,9 +159,9 @@ services:
   #  2) OFFSITE COPY TO the-grid
   # ---------------------------------------------------------------------------
   dvb-remote-the-grid:
-    # Pinned on 2026-10-14, refer to dvb-local. 2026-10-29: v2.49.1 -> v2.50.0.
+    # Pinned on 2026-10-14, refer to dvb-local. 2026-10-29: v2.49.1 -> v2.50.0. 2026-11-08: -> v2.50.1.
     # v2.50.0 needs the host key of the-grid: refer to the note of 2026-11-03 in the header.
-    image: offen/docker-volume-backup:v2.50.0
+    image: offen/docker-volume-backup:v2.50.1
     container_name: dvb-remote-the-grid
     restart: always
     env_file: ./backup-the-grid.env
