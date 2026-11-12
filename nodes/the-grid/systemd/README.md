@@ -192,6 +192,20 @@ reports these problems:
   `docker port` is empty. This is the case of §7.5: the network is attached again while the container
   runs, and the ports are not published again.
 
+Since 2026-11-12, the check also examines the path from the tailnet to Caddy (`PROBLEMI-E-SOLUZIONI.md`
+§1.7). That night, an auto-update of Tailscale restarted `tailscaled`. Caddy then saw `172.20.8.1` in
+place of the tailnet clients, and all the private routes gave 404 for about 2 hours:
+
+- **TAILSCALE CON SNAT**: `tailscale debug prefs` shows `"NoSNAT": false`. The failure starts at the
+  next restart of `tailscaled`, so this line comes before the failure. The line
+  **TAILSCALE: preferenza NoSNAT non leggibile** comes when the script cannot read the value. The
+  script waits 20 s and tries again one time before this line, because an update restarts
+  `tailscaled`.
+- **CADDY VEDE IP DOCKER**: in the last hour, `access.log` of Caddy has 5 or more 404 answers to
+  clients in `172.16.0.0/12`. This line finds the failure for each cause, also when the cause is not
+  Tailscale. The line **CADDY: access.log non leggibile** comes when Caddy runs but the script
+  cannot read the log.
+
 Each line of the message already contains the fix command. The command has the name of the network
 from `HostConfig.NetworkMode`. The check excludes the containers that use `host`, `none` or
 `container:<id>`, because by construction these containers have no network of their own.
@@ -217,6 +231,20 @@ Non-obvious choices:
   purpose. This is true for a direct start and for a start through socket activation.
 - **The check fixes nothing by itself.** The fix commands are in the message. Faginux decides when to
   start them (Regola numero uno, rule number one).
+- **The Caddy threshold is 5 requests, not 1.** A `curl` from the-grid itself to a private route also
+  comes from the Docker gateway (1 request on 2026-11-04). During the failure, Periphery of
+  ARCADE and `komodo-watchdog` sent about 130 requests each hour.
+- **The Caddy line has no count in it.** The state file keeps the text of the lines. A count would
+  change each hour, and the alarm would come again each hour.
+- **The script reads `access.log` through `docker exec caddy`.** On the host, the file is `root`
+  `600`, and the check runs as `ops`. If `caddy` does not run, the script skips this check:
+  `komodo-watchdog` on the scope already reports that case in 5 minutes.
+- **`tailscale debug prefs` is a debug command.** It is the only way to read `NoSNAT` without root,
+  but its format can change in a new version of Tailscale. For this reason, a value that the script
+  cannot read is a problem and not a pass.
+- **Test without a message:** `DRY_RUN=1 bash docker-network-check.sh` prints the problems and the
+  last state. It sends nothing and saves nothing. `CADDY_WINDOW_SECONDS=86400` makes the Caddy window
+  longer, to find a failure of the past. A full round takes about 3.5 s (measured on 2026-11-12).
 
 ### Activation
 
