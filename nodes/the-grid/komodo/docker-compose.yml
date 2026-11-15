@@ -28,7 +28,7 @@
 
 services:
   mongo:
-    image: mongo:8.0.34
+    image: mongo:8.0.38
     container_name: komodo-mongo
     restart: unless-stopped
     # WiredTiger cache limited as in the official compose file: the DB of Komodo is
