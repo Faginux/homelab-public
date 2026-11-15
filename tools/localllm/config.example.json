@@ -1,0 +1,31 @@
+{
+  "ollama_url": "http://127.0.0.1:11434",
+  "allowed_roots": [
+    "C:\\work\\repos",
+    "C:\\ollama\\inbox",
+    "C:\\Users\\...\\AppData\\Local\\Temp\\claude"
+  ],
+  "staging_dir": "C:\\ollama\\staging",
+  "audit_dir": "C:\\ollama\\logs",
+  "models_lock": "C:\\ollama\\models.lock.json",
+  "models": {
+    "default": {
+      "s": "MODEL-TAG-OF-THE-SMALL-TIER",
+      "m": "MODEL-TAG-OF-THE-MEDIUM-TIER"
+    }
+  },
+  "vram_budget_mib": 8000,
+  "vram_margin_mib": 1024,
+  "max_file_bytes": 2097152,
+  "max_call_bytes": 8388608,
+  "max_inline_chars": 4000,
+  "max_output_tokens": 1500,
+  "max_draft_tokens": 3000,
+  "num_ctx": 8192,
+  "chunk_chars": 8000,
+  "max_chunks": 16,
+  "request_timeout_seconds": 120,
+  "call_timeout_seconds": 300,
+  "keep_alive": "2m",
+  "audit_retention_days": 30
+}

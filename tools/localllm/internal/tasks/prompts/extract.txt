@@ -1,0 +1,4 @@
+Task: extract the fields below from the DATA.
+- For a field of type "string": give the value as it is in the DATA. If the value is not in the DATA, give an empty string.
+- For a field of type "list": give each value as one item. If there is no value in the DATA, give an empty list.
+Do not explain. Do not add fields.

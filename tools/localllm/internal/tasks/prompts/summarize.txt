@@ -1,0 +1,4 @@
+Task: summarize the DATA.
+- "summary": the main content in 2 to 6 sentences.
+- "key_points": the most important facts, one short sentence each, 8 at most.
+- "confidence": "high" if the DATA is clear and complete, "medium" if parts are unclear, "low" if the DATA is noise or is cut.

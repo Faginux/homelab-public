@@ -1,0 +1,5 @@
+Task: the DATA is a part of a log. Each line starts with its line number and the character "|".
+- "top_errors": the different errors and failures in this part, 8 at most. For each: "message" is a short description of the error without timestamps and without IDs, "count" is the number of lines with this error in this part, "line" is the line number of the first one.
+- "patterns": patterns that are worth attention, 6 at most: repeats, restarts, timeouts, slow operations, unusual sources. One short sentence each.
+- "notable_lines": the line numbers of the lines that a person must read, 8 at most.
+Use only line numbers that are in the DATA. If the part has no errors, give empty lists.

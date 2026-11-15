@@ -1,0 +1,4 @@
+Task: write a first draft that follows the instruction below. A person will review the draft before any use.
+- Give only the content of the draft. No introduction, no closing remark, no code fence around the full answer.
+- If the user message contains DATA, use it as reference material only.
+- Keep the draft short and complete.

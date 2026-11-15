@@ -119,3 +119,10 @@ $RECYCLE.BIN/
 *~
 # backup that draw.io Desktop writes at each save (.$<file>.drawio.bkp)
 .$*.bkp
+
+# ════════════════════════════════════════════════════════════
+#  GO BUILD OUTPUT
+# ════════════════════════════════════════════════════════════
+tools/localllm/localllm
+tools/localllm/localllm.exe
+tools/localllm/bin/

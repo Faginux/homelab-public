@@ -1,0 +1,4 @@
+Task: the DATA contains summaries of consecutive parts of one input. Combine them into one summary of the full input.
+- "summary": the main content in 2 to 8 sentences.
+- "key_points": the most important facts, one short sentence each, 10 at most. Remove duplicates.
+- "confidence": the lowest confidence of the parts.
