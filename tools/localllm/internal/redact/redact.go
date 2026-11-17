@@ -75,6 +75,9 @@ var rules = []rule{
 	{ClassKeyValue, regexp.MustCompile(`(?i)(` + name + `\\"[ \t]*[:=][ \t]*\\")([^"\\\r\n]+)(\\")`), 2},
 	{ClassKeyValue, regexp.MustCompile(`(?i)(` + name + `["']?[ \t]*[:=][ \t]*")((?:[^"\\\r\n]|\\.)+)(")`), 2},
 	{ClassKeyValue, regexp.MustCompile(`(?i)(` + name + `["']?[ \t]*[:=][ \t]*')([^'\r\n]+)(')`), 2},
+	// The first value of a JSON array: Caddy writes each request header in
+	// this form ("X-Api-Key":["value"]).
+	{ClassKeyValue, regexp.MustCompile(`(?i)(` + name + `"[ \t]*:[ \t]*\[[ \t]*")((?:[^"\\\r\n]|\\.)+)(")`), 2},
 	{ClassCLIFlag, regexp.MustCompile(`(?i)(--` + name + `[ \t]+)("[^"\r\n]*"|'[^'\r\n]*'|[^\s"'-]\S*)`), 2},
 	// An assignment at the start of a line (env file, compose list, YAML):
 	// the value can contain spaces, so the rule removes the rest of the line.

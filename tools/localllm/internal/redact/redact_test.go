@@ -60,6 +60,8 @@ func TestApplyRemovesCanaries(t *testing.T) {
 		{"apikey in a URL query", "GET http://sonarr.example:8989/api/v3/series?apikey=" + canaryValue + "&page=2 200", canaryValue, ClassKeyValue, []string{"&page=2 200", "/api/v3/series"}},
 		{"Plex token in a URL query", "GET /library/sections?X-Plex-Token=" + canaryValue + "&type=1", canaryValue, ClassKeyValue, []string{"&type=1"}},
 		{"API key header", "X-Api-Key: " + canaryValue, canaryValue, ClassKeyValue, nil},
+		{"API key header in a Caddy JSON log", `"headers":{"X-Api-Key":["` + canaryValue + `"],"Accept":["*/*"]}`, canaryValue, ClassKeyValue, []string{`"Accept":["*/*"]`}},
+		{"Plex token header in a Caddy JSON log", `{"X-Plex-Token": [ "` + canaryValue + `" ]}`, canaryValue, ClassKeyValue, nil},
 		{"env file line with spaces in the value", "POSTGRES_PASSWORD=" + canaryValue + " second word\nPOSTGRES_DB=app", "second word", ClassKeyValue, []string{"POSTGRES_DB=app"}},
 		{"compose environment list", "    environment:\n      - API_KEY=" + canaryValue + "\n      - TZ=Europe/Rome", canaryValue, ClassKeyValue, []string{"TZ=Europe/Rome", "environment:"}},
 		{"YAML mapping", "smtp:\n  password: " + canaryValue + "\n  port: 587", canaryValue, ClassKeyValue, []string{"port: 587", "smtp:"}},
