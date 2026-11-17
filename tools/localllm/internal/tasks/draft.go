@@ -61,11 +61,17 @@ func (c *call) draft(ctx context.Context) (any, *failure) {
 		c.retries++
 	}
 
+	// The orchestrator reads the staging file, so the draft goes through
+	// the same boundary as a result.
 	clean := redact.Apply(text)
 	c.redactionsOut = redact.MergeCounts(c.redactionsOut, clean.Counts)
+	draftText := c.scrub(clean.Text)
+	if c.redactionsOut[redact.ClassTainted] > 0 {
+		c.warn(taintNotice)
+	}
 
 	kind := draftKinds[c.req.Kind]
-	content := clean.Text + "\n"
+	content := draftText + "\n"
 	if kind.header != "" {
 		content = fmt.Sprintf(kind.header, draftNotice) + content
 	}

@@ -89,7 +89,7 @@ func TestWriteAndRead(t *testing.T) {
 func TestEntryHasNoContentField(t *testing.T) {
 	want := []string{
 		"chunks", "digest", "duration_ms", "input_bytes", "inputs", "mode", "model",
-		"output_bytes", "output_tokens", "prompt_tokens", "reason", "redactions_in",
+		"output_bytes", "output_tokens", "prompt_tokens", "raw_model_input", "reason", "redactions_in",
 		"redactions_out", "retries", "staging_file", "status", "task", "time",
 	}
 	var got []string

@@ -1,5 +1,8 @@
-// Package redact removes secrets from text before the text goes to the local
-// model, and again from the model output (layer L4 of the plan).
+// Package redact removes secrets from text (layer L4 of the plan). The
+// secret boundary is the orchestrator: no secret may reach it. The rules
+// always run on the model output. They run on the model input unless the
+// config permits raw input. Taint (taint.go) finds the secret values of the
+// input in the output, also in a changed form.
 //
 // The aim is to prevent accidents: a secret in a log or in a config file
 // must not go into a result, a draft or an audit record. The rules know the
@@ -86,6 +89,9 @@ var rules = []rule{
 type Result struct {
 	Text   string
 	Counts map[string]int
+	// Values are the texts that the rules replaced. They stay in memory for
+	// the taint check. Never write them to a log or a result.
+	Values []string
 }
 
 // Total returns the number of replacements of all classes.
@@ -102,7 +108,7 @@ func Apply(text string) Result {
 	result := Result{Text: text, Counts: map[string]int{}}
 	for _, r := range rules {
 		var n int
-		result.Text, n = r.apply(result.Text)
+		result.Text, n = r.apply(result.Text, &result.Values)
 		if n > 0 {
 			result.Counts[r.class] += n
 		}
@@ -110,7 +116,10 @@ func Apply(text string) Result {
 	return result
 }
 
-func (r rule) apply(text string) (string, int) {
+// apply replaces the matches and adds the replaced texts to values. The
+// marker of an earlier rule is not a secret, so the code cuts a value at
+// each marker.
+func (r rule) apply(text string, values *[]string) (string, int) {
 	matches := r.re.FindAllStringSubmatchIndex(text, -1)
 	if len(matches) == 0 {
 		return text, 0
@@ -123,6 +132,7 @@ func (r rule) apply(text string) (string, int) {
 		if start < 0 || strings.HasPrefix(text[start:end], markerPrefix) {
 			continue
 		}
+		*values = append(*values, withoutMarkers(text[start:end])...)
 		out.WriteString(text[last:start])
 		out.WriteString(markerPrefix + r.class + "]")
 		last = end
@@ -130,6 +140,18 @@ func (r rule) apply(text string) (string, int) {
 	}
 	out.WriteString(text[last:])
 	return out.String(), count
+}
+
+var markerPattern = regexp.MustCompile(`\[REDACTED:[a-z_]+\]`)
+
+func withoutMarkers(value string) []string {
+	var parts []string
+	for _, part := range markerPattern.Split(value, -1) {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
 }
 
 // MergeCounts adds the counts of src to dst and returns dst.

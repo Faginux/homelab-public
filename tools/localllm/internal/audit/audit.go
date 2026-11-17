@@ -33,18 +33,22 @@ type Input struct {
 
 // Entry is one audit record.
 type Entry struct {
-	Time          string         `json:"time"`
-	Mode          string         `json:"mode"`
-	Task          string         `json:"task"`
-	Status        string         `json:"status"`
-	Reason        string         `json:"reason,omitempty"`
-	Model         string         `json:"model,omitempty"`
-	Digest        string         `json:"digest,omitempty"`
-	Inputs        []Input        `json:"inputs,omitempty"`
-	InputBytes    int64          `json:"input_bytes"`
-	OutputBytes   int64          `json:"output_bytes"`
-	Chunks        int            `json:"chunks,omitempty"`
-	Retries       int            `json:"retries,omitempty"`
+	Time        string  `json:"time"`
+	Mode        string  `json:"mode"`
+	Task        string  `json:"task"`
+	Status      string  `json:"status"`
+	Reason      string  `json:"reason,omitempty"`
+	Model       string  `json:"model,omitempty"`
+	Digest      string  `json:"digest,omitempty"`
+	Inputs      []Input `json:"inputs,omitempty"`
+	InputBytes  int64   `json:"input_bytes"`
+	OutputBytes int64   `json:"output_bytes"`
+	Chunks      int     `json:"chunks,omitempty"`
+	Retries     int     `json:"retries,omitempty"`
+	// RawModelInput is true when the model got the input with no
+	// redaction. RedactionsIn then counts the values that the rules found,
+	// not values that they removed.
+	RawModelInput bool           `json:"raw_model_input,omitempty"`
 	RedactionsIn  map[string]int `json:"redactions_in,omitempty"`
 	RedactionsOut map[string]int `json:"redactions_out,omitempty"`
 	PromptTokens  int            `json:"prompt_tokens"`

@@ -19,12 +19,16 @@ const (
 	maxLogLineChars = 500
 )
 
-// document is one input after the redaction.
+// document is one input. text is the text for the model: redacted, or raw
+// when the config permits raw input.
 type document struct {
-	name  string
-	text  string
-	lines []string
+	name     string
+	text     string
+	redacted string
+	lines    []string
 }
+
+const taintOverflowNotice = "the input has too many secret values for the taint check: the model got the redacted text"
 
 // chunk is the part of a document that goes into one model call.
 type chunk struct {
@@ -38,8 +42,26 @@ type chunk struct {
 }
 
 // loadInput reads the files through the path policy, checks the text
-// input, and removes secrets from both.
+// input, and finds the secret values of both. The model gets the raw text
+// only when the config permits it and the taint set is complete.
 func (c *call) loadInput() *failure {
+	if f := c.readInput(); f != nil {
+		return f
+	}
+	c.rawInput = c.cfg.RawModelInput && !c.taint.Overflow()
+	if c.cfg.RawModelInput && !c.rawInput {
+		c.warn(taintOverflowNotice)
+	}
+	for i := range c.docs {
+		if !c.rawInput {
+			c.docs[i].text = c.docs[i].redacted
+		}
+		c.docs[i].redacted = ""
+	}
+	return nil
+}
+
+func (c *call) readInput() *failure {
 	if len(c.req.Paths) > 0 {
 		files, err := c.runner.Files.ReadAll(c.req.Paths)
 		if err != nil {
@@ -82,7 +104,8 @@ func (c *call) loadInput() *failure {
 func (c *call) addDocument(name, text string) {
 	res := redact.Apply(text)
 	c.redactionsIn = redact.MergeCounts(c.redactionsIn, res.Counts)
-	c.docs = append(c.docs, document{name: name, text: res.Text})
+	c.taint.Add(res.Values...)
+	c.docs = append(c.docs, document{name: name, text: text, redacted: res.Text})
 }
 
 // planChunks cuts the documents for the task. It runs before the model

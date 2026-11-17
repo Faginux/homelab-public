@@ -7,6 +7,10 @@ const bytesPerToken = 4
 // StatusOK is the status of a call that gave a result.
 const StatusOK = "ok"
 
+// TaskView is the task name of a redacted view. The orchestrator reads the
+// text of a view, so a view saves no tokens.
+const TaskView = "view"
+
 // Stats is the summary of a group of records.
 type Stats struct {
 	Calls        int            `json:"calls"`
@@ -37,7 +41,7 @@ func Summarize(entries []Entry) Stats {
 		for _, n := range e.RedactionsOut {
 			stats.Redactions += n
 		}
-		if e.Status != StatusOK {
+		if e.Status != StatusOK || e.Task == TaskView {
 			continue
 		}
 		stats.InputBytes += e.InputBytes

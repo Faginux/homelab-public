@@ -8,6 +8,7 @@
   "staging_dir": "C:\\ollama\\staging",
   "audit_dir": "C:\\ollama\\logs",
   "models_lock": "C:\\ollama\\models.lock.json",
+  "raw_model_input": false,
   "models": {
     "default": {
       "s": "MODEL-TAG-OF-THE-SMALL-TIER",

@@ -158,6 +158,11 @@ type call struct {
 	chunks []chunk
 	model  config.LockedModel
 
+	// taint has the secret values of the input. They stay in memory only.
+	taint *redact.Taint
+	// rawInput is true when the model got the input with no redaction.
+	rawInput bool
+
 	inputs        []audit.Input
 	inputBytes    int64
 	redactionsIn  map[string]int
@@ -181,7 +186,7 @@ func (r *Runner) Run(ctx context.Context, req Request) Envelope {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	c := &call{runner: r, cfg: r.Config, req: req, started: r.now(), nonce: newNonce()}
+	c := &call{runner: r, cfg: r.Config, req: req, started: r.now(), nonce: newNonce(), taint: redact.NewTaint()}
 	ctx, cancel := context.WithTimeout(ctx, r.Config.CallTimeout())
 	defer cancel()
 
@@ -190,7 +195,9 @@ func (r *Runner) Run(ctx context.Context, req Request) Envelope {
 	env := Envelope{Label: OutputLabel, Status: StatusOK, Task: req.Task, Model: c.model.Tag, Warnings: c.warnings}
 	var outputBytes int64
 	if f != nil {
-		env.Status, env.Reason, env.Detail = f.status, f.reason, f.detail
+		// An engine message can quote the prompt, and the prompt can have
+		// raw input.
+		env.Status, env.Reason, env.Detail = f.status, f.reason, c.scrub(f.detail)
 	} else {
 		env.Result = result
 		if raw, err := json.Marshal(result); err == nil {
@@ -212,7 +219,8 @@ func (r *Runner) Run(ctx context.Context, req Request) Envelope {
 		Model: c.model.Tag, Digest: c.model.Digest,
 		Inputs: c.inputs, InputBytes: c.inputBytes, OutputBytes: outputBytes,
 		Chunks: len(c.chunks), Retries: c.retries,
-		RedactionsIn: c.redactionsIn, RedactionsOut: c.redactionsOut,
+		RawModelInput: c.rawInput,
+		RedactionsIn:  c.redactionsIn, RedactionsOut: c.redactionsOut,
 		PromptTokens: c.promptTokens, OutputTokens: c.outputTokens,
 		DurationMs: env.Stats.DurationMs, StagingFile: c.stagingFile,
 	}
@@ -257,9 +265,10 @@ func (c *call) run(ctx context.Context) (any, *failure) {
 	return c.redactOutput(result)
 }
 
-// redactOutput runs the redaction on each string of the result. The model
-// cannot give a secret that it did not get, but it can decode or change the
-// form of one that the input rules did not know.
+// redactOutput runs the redaction and the taint check on each string of the
+// result. This is the secret boundary: the result goes to the orchestrator.
+// The model can repeat a secret of a raw input, or decode or change the form
+// of a secret that the input rules did not know.
 func (c *call) redactOutput(result any) (any, *failure) {
 	raw, err := json.Marshal(result)
 	if err != nil {
@@ -269,7 +278,22 @@ func (c *call) redactOutput(result any) (any, *failure) {
 	if err := json.Unmarshal(raw, &generic); err != nil {
 		return nil, fail(StatusError, "encode_failed", "")
 	}
-	return c.redactValue(generic), nil
+	clean := c.redactValue(generic)
+	if c.redactionsOut[redact.ClassTainted] > 0 {
+		c.warn(taintNotice)
+	}
+	return clean, nil
+}
+
+const taintNotice = "the result had text from secret values of the input: it was removed"
+
+// scrub runs the taint check on one text that goes to the orchestrator.
+func (c *call) scrub(text string) string {
+	clean, n := c.taint.Scrub(text)
+	if n > 0 {
+		c.redactionsOut = redact.MergeCounts(c.redactionsOut, map[string]int{redact.ClassTainted: n})
+	}
+	return clean
 }
 
 func (c *call) redactValue(value any) any {
@@ -277,7 +301,7 @@ func (c *call) redactValue(value any) any {
 	case string:
 		res := redact.Apply(v)
 		c.redactionsOut = redact.MergeCounts(c.redactionsOut, res.Counts)
-		return res.Text
+		return c.scrub(res.Text)
 	case []any:
 		for i := range v {
 			v[i] = c.redactValue(v[i])

@@ -66,6 +66,12 @@ type Config struct {
 	AuditDir     string   `json:"audit_dir"`
 	ModelsLock   string   `json:"models_lock"`
 
+	// RawModelInput gives the input to the model with no redaction. The
+	// secret boundary is the orchestrator, not the local model: the taint
+	// check removes the secret values of the input from each result. The
+	// default (false) also removes them before the model.
+	RawModelInput bool `json:"raw_model_input"`
+
 	// Models gives a model tag for each task and tier. The key "default"
 	// applies to a task that has no entry of its own.
 	Models map[string]map[string]string `json:"models"`
