@@ -1,0 +1,44 @@
+# =============================================================================
+#  CrowdSec whitelist: Spoolman requests that have NO credentials
+#  Mounted by the compose file of this folder at
+#  /etc/crowdsec/parsers/s02-enrich/ops-spoolman-noauth-whitelist.yaml
+#
+#  Why (2026-11-18): Caddy puts basic_auth in front of Spoolman. Browsers that
+#  opened Spoolman before version 0.27 keep the service worker of the old React
+#  client. That worker shows the old app from its cache, with no request to the
+#  server, and the app then sends about 9 API calls at the same time. When the
+#  browser has no cached credentials (for example after Android stops Chrome),
+#  these calls have no Authorization header and all get 401. The caddy-logs
+#  parser marks each 401 with "WWW-Authenticate: Basic" as auth_fail, and
+#  crowdsecurity/http-generic-bf (capacity 5, leakspeed 10s) bans the IP after
+#  6 events. At 23:19 on 2026-11-18 it banned the phone of the operator for 4 h:
+#  403 on all the routes with crowdsec (immich, vault, paperless...).
+#  PROBLEMI-E-SOLUZIONI.md §10.7.
+#
+#  Rule: a 401 with no Authorization header did not try a password, so it is
+#  not a brute force. A request WITH an Authorization header (a wrong password)
+#  still counts. Caddy writes the header as ["REDACTED"] in the log, so the
+#  header is there but the value is not.
+#
+#  It is narrow on purpose: only the spoolman host, only GET/HEAD, only 401,
+#  only the paths that the Spoolman client calls (/api/v1/... and the
+#  manifest). A scanner on other paths still counts. An event dropped here
+#  disappears from ALL the scenarios, not only from the brute force.
+#
+#  Fields: crowdsecurity/caddy-logs writes the evt.Meta.* and
+#  evt.Unmarshaled.caddy in s01-parse, so they already exist here, whatever the
+#  order of the parsers in s02. http_path is the COMPLETE URI, query string
+#  included. [.] instead of \. so that the escapes do not need to be doubled
+#  between YAML and expr.
+#
+#  Changes: a single-file bind mount, so after a git pull run
+#  "docker compose up -d --force-recreate crowdsec". A restart is not enough
+#  (§10.4). Check: cscli explain --type caddy on a real log line.
+# =============================================================================
+name: ops/spoolman-noauth-whitelist
+description: "Spoolman: a 401 with no credentials is not a brute force"
+filter: "evt.Meta.service == 'http' && evt.Meta.log_type in ['http_access-log', 'http_error-log']"
+whitelist:
+  reason: "Spoolman client request with no Authorization header"
+  expression:
+    - "evt.Meta.target_fqdn == 'spoolman.homelab.example' && evt.Meta.http_verb in ['GET', 'HEAD'] && evt.Meta.http_status == '401' && get(evt.Unmarshaled.caddy.request.headers, 'Authorization') == nil && (evt.Meta.http_path startsWith '/api/v1/' || evt.Meta.http_path matches '^/manifest[.]webmanifest([?].*)?$')"

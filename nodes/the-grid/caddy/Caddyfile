@@ -101,6 +101,21 @@
         # /config/spoolman-basic-auth.txt in the container (host path
         # /srv/docker/caddy/config/), one line: "<user> <bcrypt hash>".
         # If the file is missing, Caddy cannot load this Caddyfile.
+        # Spoolman /sw.js passes with NO basic_auth (2026-11-18). Spoolman 0.27
+        # serves there a static "self-destructing" service worker: it removes the
+        # worker of the old React client, which shows the old app from its cache.
+        # The browser checks /sw.js with no credentials, so behind basic_auth the
+        # check got 401 and the old worker stayed. The file has no data.
+        # This block must stay BEFORE "handle @spoolman". PROBLEMI-E-SOLUZIONI.md §10.7.
+        @spoolman_sw {
+                host spoolman.homelab.example
+                path /sw.js
+        }
+        handle @spoolman_sw {
+                crowdsec
+                reverse_proxy 198.51.100.20:7912
+        }
+
         @spoolman host spoolman.homelab.example
         handle @spoolman {
                 crowdsec

@@ -96,6 +96,10 @@ services:
       # qbit WebUI with an empty cache bans your own IP (2026-09-23, see the
       # comment in the file). Single file: after a pull, --force-recreate is necessary.
       - ./crowdsec-whitelist-qbit-wasm.yaml:/etc/crowdsec/parsers/s02-enrich/ops-qbit-wasm-whitelist.yaml:ro
+      # Whitelist of the Spoolman 401s with no credentials. Without it, the old
+      # service worker of Spoolman bans your own IP when you open the page
+      # (2026-11-18, see the comment in the file). Single file, as above.
+      - ./crowdsec-whitelist-spoolman-noauth.yaml:/etc/crowdsec/parsers/s02-enrich/ops-spoolman-noauth-whitelist.yaml:ro
     environment:
       COLLECTIONS: "crowdsecurity/caddy crowdsecurity/base-http-scenarios"
     healthcheck:
