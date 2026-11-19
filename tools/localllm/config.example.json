@@ -11,19 +11,21 @@
   "raw_model_input": false,
   "models": {
     "default": {
-      "s": "MODEL-TAG-OF-THE-SMALL-TIER",
-      "m": "MODEL-TAG-OF-THE-MEDIUM-TIER"
+      "s": "qwen3:4b-instruct-2507-q4_K_M"
+    },
+    "extract": {
+      "m": "bonsai-2:9b"
     }
   },
-  "vram_budget_mib": 8000,
+  "vram_budget_mib": 7926,
   "vram_margin_mib": 1024,
   "max_file_bytes": 2097152,
   "max_call_bytes": 8388608,
   "max_inline_chars": 4000,
   "max_output_tokens": 1500,
   "max_draft_tokens": 3000,
-  "num_ctx": 8192,
-  "chunk_chars": 8000,
+  "num_ctx": 16384,
+  "chunk_chars": 20000,
   "max_chunks": 16,
   "request_timeout_seconds": 120,
   "call_timeout_seconds": 300,

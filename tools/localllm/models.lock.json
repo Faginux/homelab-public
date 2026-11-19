@@ -1,0 +1,14 @@
+{
+  "models": [
+    {
+      "tag": "qwen3:4b-instruct-2507-q4_K_M",
+      "digest": "0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0",
+      "vram_mib": 4200
+    },
+    {
+      "tag": "bonsai-2:9b",
+      "digest": "c8b5462f8688647fe0b53568e3c00181ada5f05300aa4bf00695f2902f4d388e",
+      "vram_mib": 4000
+    }
+  ]
+}
