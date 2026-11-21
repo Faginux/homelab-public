@@ -1,0 +1,63 @@
+# =============================================================================
+#  Stack: RECYCLARR  --  ARCADE
+#  Recyclarr keeps the custom format (CF) definitions of Radarr and Sonarr
+#  (bare metal apps on this host) equal to the TRaSH Guides. It manages only
+#  the CFs in configs/*.yml. It does not set a score (O16): Faginux sets the
+#  scores in the UI. It does not change the quality profiles.
+#  Plan and decisions: PLAN-RECYCLARR.md at the root of the repo.
+#
+#  Two services:
+#    recyclarr  The built-in cron of the image runs the sync (CRON_SCHEDULE).
+#    apprise    Apprise API in the stateful mode "simple". It sends the sync
+#               results to Discord. No published port: only this project
+#               can reach it.
+#
+#  No .env: the stack has no variables. `name:` below sets the project name.
+#  No secret in this file and no secret in the environment (D6):
+#    - API keys and app URLs: S:/docker-appdata/recyclarr/config/secrets.yml.
+#      New-RecyclarrSecretsFile.ps1 writes it and prints no value.
+#    - Discord URL: S:/docker-appdata/recyclarr/apprise/recyclarr.cfg.
+#      Faginux writes it.
+#  Thus `docker inspect` and the deployed config of Komodo show no secret.
+#
+#  The instance files (radarr.yml, sonarr.yml) are in git, in ./configs. The
+#  second bind puts them read-only on /config/configs, inside the first bind
+#  (D7). Each bind path is ABSOLUTE (CLAUDE.md, Trappola 1).
+#
+#  Pinned tags (D10): release-check reads only full version tags.
+#  No network on purpose: Compose makes "recyclarr_default" for this project
+#  only. Recyclarr must reach the host and GitHub, and Apprise must reach
+#  Discord. Thus the network is not "internal".
+# =============================================================================
+
+name: recyclarr
+
+services:
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr:8.8.1
+    container_name: recyclarr
+    restart: unless-stopped
+    # O10: the default user of the image (it does not run as root), as cleanuparr
+    user: "1000:1000"
+    environment:
+      - TZ=Europe/Rome
+      # D9: proposal. Faginux sets the time in R8, after R7 gives the real duration
+      - CRON_SCHEDULE=41 9 * * *
+    volumes:
+      - S:/docker-appdata/recyclarr/config:/config
+      # D7, O9: read-only, inside the bind above
+      - S:/github/homelab/stacks/recyclarr/configs:/config/configs:ro
+
+  apprise:
+    image: caronc/apprise:2.1.0
+    container_name: recyclarr-apprise
+    restart: unless-stopped
+    environment:
+      # The key "recyclarr" is the file /config/recyclarr.cfg (O6)
+      - APPRISE_STATEFUL_MODE=simple
+      # D8: the default is (2 * CPUs) + 1 processes
+      - APPRISE_WORKER_COUNT=1
+      # D8: the API cannot read the configuration (the Discord URL)
+      - APPRISE_CONFIG_LOCK=yes
+    volumes:
+      - S:/docker-appdata/recyclarr/apprise:/config
