@@ -559,8 +559,21 @@ With the `acpi-cpufreq` driver (Zen+), the hardware controls the boost above 2.1
 Performance Boost). `scaling_max_freq` stops at 2100 MHz, thus a limit between 2.1 and 3.7 GHz is
 not possible. Boost is only on or off.
 
-The cost: the peak clock goes from 3.7 to 2.1 GHz. Heavy jobs (Immich thumbnails, Paperless OCR)
-take more time. At a load average of 0.3, the services at the edge (Caddy, CrowdSec) do not see a
+The cost: the peak clock goes from 3.7 to 2.1 GHz. A benchmark on 2026-11-21 (`openssl speed
+-seconds 5 sha256`, and `gzip` of 230 MB of text) gave these results:
+
+| Test | Boost on | Boost off | Change |
+|---|---|---|---|
+| sha256, 1 process (16 KB blocks) | 1708 MB/s | 996 MB/s | -42 % |
+| sha256, 8 processes (16 KB blocks) | 7909 MB/s | 7259 MB/s | -8 % |
+| `gzip`, 1 thread | 9.25 s | 15.86 s | 1.71 times the time |
+
+A task on one core loses approximately the ratio of the clocks (2.1 / 3.7). With all the cores
+busy, the loss is small: boost on does not keep a high clock on all the cores. The probable cause
+is the power limit of the CPU. Short tasks on few cores lose the most: the `gzip` step of
+`dvb-local`, the OCR of one Paperless document, a FlareSolverr challenge. `dvb-local` stops 12
+containers during the archive step: 31 to 34 s from 2026-11-10 to 2026-11-20, with boost on. Expect
+a longer stop. At a load average of 0.3, the services at the edge (Caddy, CrowdSec) do not see a
 difference.
 
 | File here | Real destination on the-grid | Permissions |
