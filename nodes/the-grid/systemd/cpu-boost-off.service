@@ -1,0 +1,18 @@
+[Unit]
+Description=Turn off CPU boost to keep the fan speed stable
+# Without boost, the CPU stays at 2.1 GHz or less. Short boost bursts to 3.7 GHz
+# made Tctl go up by 10 C in 0.5 s. The EC of the board follows Tctl and
+# changed the fan speed at each burst. Linux cannot control the fan (no pwm in hwmon).
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# udev loads acpi_cpufreq, so the boost file can be missing at this time.
+# Wait for it for a maximum of 30 s. If it does not show, the unit fails (visible in systemctl --failed).
+ExecStartPre=/usr/bin/timeout 30 /usr/bin/sh -c 'until [ -e /sys/devices/system/cpu/cpufreq/boost ]; do sleep 1; done'
+ExecStart=/usr/bin/sh -c 'echo 0 > /sys/devices/system/cpu/cpufreq/boost'
+# A stop of the unit turns boost on again. Rollback: systemctl disable --now cpu-boost-off.service
+ExecStop=/usr/bin/sh -c 'echo 1 > /sys/devices/system/cpu/cpufreq/boost'
+
+[Install]
+WantedBy=multi-user.target

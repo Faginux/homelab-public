@@ -541,3 +541,55 @@ normal: the tool sends each result only once.
 A new build does not have the same sha256 as the installed file. Go writes the Git revision of the
 repo (`vcs.revision`) into the binary. To find the source of an installed binary, copy it to a
 machine with Go. Then run `go version -m <file>` and read `vcs.revision` and `vcs.modified`.
+
+---
+
+## CPU boost off for a stable fan — `cpu-boost-off.service`
+
+On 2026-11-21 the fan of the-grid changed speed many times, also with the host at idle and at 39 °C.
+Linux cannot see or control the fan: `hwmon` has no `pwm` or `fan` entry, and ACPI has no fan
+device. The EC of the board controls the fan by itself.
+
+A sample of 60 s at 0.5 s intervals showed the cause. Each 10 to 15 s, a short task started a core.
+The CPU went into boost at 3.7 GHz and Tctl went from 39 °C to 49 °C in 0.5 s. Then it went down in
+approximately 8 s. The EC followed these peaks. With boost off, the same sample showed 38 to 40 °C,
+no step of 3 °C or more, and a maximum of 2100 MHz. After this change the fan was almost silent.
+
+With the `acpi-cpufreq` driver (Zen+), the hardware controls the boost above 2.1 GHz (Core
+Performance Boost). `scaling_max_freq` stops at 2100 MHz, thus a limit between 2.1 and 3.7 GHz is
+not possible. Boost is only on or off.
+
+The cost: the peak clock goes from 3.7 to 2.1 GHz. Heavy jobs (Immich thumbnails, Paperless OCR)
+take more time. At a load average of 0.3, the services at the edge (Caddy, CrowdSec) do not see a
+difference.
+
+| File here | Real destination on the-grid | Permissions |
+|---|---|---|
+| `cpu-boost-off.service` | `/etc/systemd/system/cpu-boost-off.service` | `644`, root |
+
+The unit writes `0` to `/sys/devices/system/cpu/cpufreq/boost` at boot. udev loads `acpi_cpufreq`,
+thus the file can be missing when the unit starts. The unit waits for the file for a maximum of 30
+s. If the file does not show, the unit fails: it does not fail silently. A stop of the unit writes
+`1`, and boost is on again.
+
+### Activation
+
+```bash
+cd ~/github/homelab/nodes/the-grid/systemd
+sudo install -m 644 -o root -g root cpu-boost-off.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable cpu-boost-off.service   # starts at the next boot
+sudo systemctl start cpu-boost-off.service    # applies now (boost was already 0 on 2026-11-21)
+```
+
+Rollback: `sudo systemctl disable --now cpu-boost-off.service`. The stop writes `1`.
+
+### Verification
+
+```bash
+cat /sys/devices/system/cpu/cpufreq/boost                         # 0
+systemctl show cpu-boost-off.service -p ActiveState,SubState,Result   # active / exited / success
+```
+
+Do this check again after the first reboot. The wait for `acpi_cpufreq` is the part that only a
+real boot can test.
