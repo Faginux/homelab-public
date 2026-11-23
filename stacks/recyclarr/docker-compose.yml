@@ -54,10 +54,15 @@ services:
       - S:/github/homelab/stacks/recyclarr/configs:/config/configs:ro
 
   apprise:
-    image: caronc/apprise:2.1.0
+    image: caronc/apprise:2.2.0
     container_name: recyclarr-apprise
     restart: unless-stopped
     environment:
+      # 2.2.0 adds reminders: a scheduler process, 4 threads, and the route /reminder/<key>
+      # (open to a caller with no login). This stack does not use them. With "no" the scheduler
+      # exits at start, and 2.2.0 uses the same memory and has the same routes as 2.1.0
+      # (test of 2026-11-23, with 2.1.0 as a control)
+      - APPRISE_REMINDER_ENABLED=no
       # The key "recyclarr" is the file /config/recyclarr.cfg (O6)
       - APPRISE_STATEFUL_MODE=simple
       # D8: the default is (2 * CPUs) + 1 processes

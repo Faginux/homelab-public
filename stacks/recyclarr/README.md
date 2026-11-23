@@ -13,7 +13,7 @@ LAN address of the host, because their Allowed Hosts list rejects `host.docker.i
 
 | File | Location | In git | Content |
 |---|---|---|---|
-| `docker-compose.yml` | this folder | yes | Recyclarr 8.8.1 and Apprise API 2.1.0 |
+| `docker-compose.yml` | this folder | yes | Recyclarr 8.8.1 and Apprise API 2.2.0 |
 | `configs/radarr.yml`, `configs/sonarr.yml` | this folder, read-only on `/config/configs` | yes | The instances and the trash IDs of the managed CFs, with no score (step R5) |
 | `Export-ArrCfState.ps1` | this folder | yes | Read-only export: CFs, quality profiles, score matrix |
 | `New-RecyclarrSecretsFile.ps1` | this folder | yes | Writes `secrets.yml` and prints no value |
@@ -73,4 +73,11 @@ Recyclarr sends the result of each sync to the Apprise API of the stack
   connection gives `Fatal error: Connection refused` and exit code 1, and no request reaches
   Apprise. Thus an outage of Radarr or Sonarr at the cron time shows in the files of
   `logs/cli/` (line `ERR Exiting due to fatal error`), not in Discord.
+- Since 2026-11-23 the stack uses Apprise API 2.2.0. This version adds reminders (a scheduler
+  process and the route `/reminder/<key>`). The stack does not use them, so the compose file sets
+  `APPRISE_REMINDER_ENABLED=no`. With this variable, 2.2.0 gives the same answers as 2.1.0: HTTP
+  200 with the tag `recyclarr`, 400 with no tag or with `all`, 424 for another tag, 403 on the read
+  of the configuration. Do the same test again before the next Apprise bump: start a temporary
+  container of the old and of the new version with the same lock, a test file `recyclarr.cfg`
+  that points to a local sink, and compare the status codes.
 - To change the Discord URL, Faginux writes the file again. Claude never reads it.
