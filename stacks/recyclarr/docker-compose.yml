@@ -17,8 +17,12 @@
 #    - API keys and app URLs: S:/docker-appdata/recyclarr/config/secrets.yml.
 #      New-RecyclarrSecretsFile.ps1 writes it and prints no value.
 #    - Discord URL: S:/docker-appdata/recyclarr/apprise/recyclarr.cfg.
-#      Faginux writes it.
+#      Faginux writes it, with the tag: recyclarr=discord://<id>/<token>.
 #  Thus `docker inspect` and the deployed config of Komodo show no secret.
+#
+#  Komodo: Stack "recyclarr" since 2026-11-22 (Pre Pull off, Poll on, Auto
+#  Update off). The apprise image declares /attach and /plugin: Compose makes
+#  two anonymous volumes with no data. `docker compose down -v` deletes them.
 #
 #  The instance files (radarr.yml, sonarr.yml) are in git, in ./configs. The
 #  second bind puts them read-only on /config/configs, inside the first bind
@@ -41,8 +45,9 @@ services:
     user: "1000:1000"
     environment:
       - TZ=Europe/Rome
-      # D9: proposal. Faginux sets the time in R8, after R7 gives the real duration
-      - CRON_SCHEDULE=41 9 * * *
+      # D9 (Faginux, R8): 09:43 every day. 18 s for the two syncs (R7). At this minute no other
+      # job starts on the three hosts (CALENDARIO-OPERAZIONI.md)
+      - CRON_SCHEDULE=43 9 * * *
     volumes:
       - S:/docker-appdata/recyclarr/config:/config
       # D7, O9: read-only, inside the bind above
@@ -57,7 +62,9 @@ services:
       - APPRISE_STATEFUL_MODE=simple
       # D8: the default is (2 * CPUs) + 1 processes
       - APPRISE_WORKER_COUNT=1
-      # D8: the API cannot read the configuration (the Discord URL)
+      # D8: the API cannot read the configuration (the Discord URL). With the lock, Apprise
+      # API 2.x sends only to a specific tag: settings.yml of Recyclarr sends "recyclarr", and
+      # the line of recyclarr.cfg has this tag (recyclarr=<url>)
       - APPRISE_CONFIG_LOCK=yes
     volumes:
       - S:/docker-appdata/recyclarr/apprise:/config

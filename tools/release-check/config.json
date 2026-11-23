@@ -64,6 +64,14 @@
     "netplexflix/umtk": {
       "track": "rebuild",
       "notes": "https://github.com/netplexflix/umtk/releases"
+    },
+    "recyclarr/recyclarr": {
+      "track": "major",
+      "notes": "https://github.com/recyclarr/recyclarr/releases"
+    },
+    "caronc/apprise": {
+      "track": "major",
+      "notes": "https://github.com/caronc/apprise-api/releases"
     }
   }
 }

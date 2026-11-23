@@ -50,11 +50,27 @@ API key. Expect 0.
 
 ## State
 
-On 2026-11-21: step R3 of the plan. The files exist. No container exists. Until step R8 creates
-the containers, the drift check of ARCADE (21:10) shows the two services as
-`SENZA CONTAINER`. This is the expected result. **Do not run the `docker compose up -d` of that
-message before step R8.** The configs bind is live: a running container syncs the files at the
-cron time, also before Faginux approves the preview (step R6).
+Since 2026-11-22 (step R8 of the plan): the two containers run, and the Stack `recyclarr` is in
+Komodo. The built-in cron of the image starts `recyclarr sync` every day at 09:43
+(`CRON_SCHEDULE`, `TZ=Europe/Rome`). The two syncs take about 18 s.
 
 Each `docker compose` command that starts or stops a container is a state transition. The
-Regola numero uno (rule number one) of `CLAUDE.md` applies.
+Regola numero uno (rule number one) of `CLAUDE.md` applies. A Komodo Deploy is also a state
+transition.
+
+## Notifications
+
+Recyclarr sends the result of each sync to the Apprise API of the stack
+(`S:\docker-appdata\recyclarr\config\settings.yml`). Apprise sends it to Discord.
+
+- `verbosity: normal` (D11): a message only when a sync changes something, or for a warning or an
+  error. No message when nothing changes.
+- `APPRISE_CONFIG_LOCK=yes`: the API cannot read the Discord URL. With the lock, Apprise API 2.x
+  sends only to a specific tag. Thus `settings.yml` has `tags: recyclarr`, and the line of
+  `recyclarr.cfg` has the same tag: `recyclarr=discord://<webhook_id>/<webhook_token>`. With no
+  tag, Apprise gives HTTP 400 and Recyclarr writes `Failed to send notification` in its log.
+- A fatal error sends no message. Test of 2026-11-23 (step R9.4): an instance that refuses the
+  connection gives `Fatal error: Connection refused` and exit code 1, and no request reaches
+  Apprise. Thus an outage of Radarr or Sonarr at the cron time shows in the files of
+  `logs/cli/` (line `ERR Exiting due to fatal error`), not in Discord.
+- To change the Discord URL, Faginux writes the file again. Claude never reads it.

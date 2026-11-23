@@ -231,6 +231,14 @@
         @{ Id = 'qbit-manage'; Name = 'qbit_manage'; Host = 'arcade'; Kind = 'container'
            Stack = 'stacks/qbit_manage'
            Containers = @(@{ Name = 'qbit_manage'; State = 'running' }) }
+        @{ Id = 'recyclarr'; Name = 'Recyclarr'; Host = 'arcade'; Kind = 'container'
+           Stack = 'stacks/recyclarr'
+           Note = 'Daily cron at 09:43. Updates only the custom format definitions of Radarr and Sonarr. Changes no score.'
+           Containers = @(@{ Name = 'recyclarr'; State = 'running' }) }
+        @{ Id = 'recyclarr-apprise'; Name = 'Recyclarr Apprise'; Host = 'arcade'; Kind = 'container'
+           Stack = 'stacks/recyclarr'
+           Note = 'Apprise API of the recyclarr stack. No published port. Sends the sync result to Discord.'
+           Containers = @(@{ Name = 'recyclarr-apprise'; State = 'running' }) }
         @{ Id = 'komodo-periphery-v4'; Name = 'Komodo Periphery (ARCADE)'; Host = 'arcade'; Kind = 'container'; Icon = 'komodo'
            Stack = 'stacks/komodo-periphery'
            Containers = @(@{ Name = 'komodo-periphery'; State = 'running' }) }
