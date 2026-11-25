@@ -74,6 +74,10 @@ $NssmSha256      = 'EEE9C44C29C2BE011F1F1E43BB8C3FCA888CB81053022EC5A0060035DE16
 $ServiceName     = 'Ollama'
 $ServiceAccount  = 'NT AUTHORITY\LocalService'
 $LocalServiceSid = 'S-1-5-19'
+$AdministratorsSid = 'S-1-5-32-544'
+$SystemSid       = 'S-1-5-18'
+# The user who runs the elevated install. localllm runs as this user.
+$OperatorSid     = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $Port            = 11434
 $InstallDir      = 'C:\Program Files\Ollama'
 $NssmDir         = 'C:\Program Files\NSSM'
@@ -244,7 +248,7 @@ if ($blockers.Count -gt 0) {
 $serviceFolderList = ($ServiceFolders | ForEach-Object { Join-Path $DataRoot $_ }) -join ', '
 $nssmStepText = if ($reuseNssm) { "Keep $NssmTarget (the SHA256 agrees)" } else { "Copy nssm.exe to $NssmTarget" }
 $steps = @(
-    "1. Make $DataRoot\{$($DataFolders -join ',')}. LocalService gets Modify on $serviceFolderList"
+    "1. Make $DataRoot\{$($DataFolders -join ',')} with an explicit ACL (no inheritance: Administrators, SYSTEM, the operator $OperatorSid). LocalService gets Modify on $serviceFolderList"
     "2. Extract the zip to $InstallDir"
     "3. $nssmStepText"
     "4. Install the service ${ServiceName}: $OllamaExe serve, Automatic (Delayed), restart after $($RestartDelayMs / 1000) s, log $LogFile (rotation at $($LogRotateBytes / 1MB) MB)"
@@ -270,6 +274,14 @@ try {
     # Step 1: data folders.
     New-Item -ItemType Directory -Path $DataRoot | Out-Null
     $undo.Add([pscustomobject]@{ Text = "Remove $DataRoot"; Action = { Remove-Item -LiteralPath $DataRoot -Recurse -Force } })
+    # Explicit ACL, no inheritance from C:\ (security audit run 1). The default ACL of C:\
+    # gives Authenticated Users Modify on new subfolders, so other local accounts (for
+    # example the service account of the *arr apps) could write inbox, staging and bin.
+    # Administrators and SYSTEM: Full. The operator (localllm runs as this user): Modify.
+    # LocalService: traverse and read this folder only; Modify on models and logs below.
+    $null = & icacls.exe $DataRoot /inheritance:r /grant:r `
+        "*${AdministratorsSid}:(OI)(CI)F" "*${SystemSid}:(OI)(CI)F" "*${OperatorSid}:(OI)(CI)M" "*${LocalServiceSid}:(RX)"
+    if ($LASTEXITCODE -ne 0) { throw "icacls failed on $DataRoot (exit code $LASTEXITCODE)." }
     foreach ($folder in $DataFolders) {
         New-Item -ItemType Directory -Path (Join-Path $DataRoot $folder) | Out-Null
     }

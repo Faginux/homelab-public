@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 <#
-  Invoke-TheGridBackupPull.ps1  -  v1.0  (2026-10-02)
+  Invoke-TheGridBackupPull.ps1  -  v1.1  (2026-11-25)
   Brings the backups that the-grid makes to ARCADE. ARCADE downloads them (pull).
   the-grid has no key to connect to this host (PIANO-DECLASSAMENTO-scope.md, Part A, D1).
   The Scheduled Task the-grid-BackupPull starts it through Invoke-TheGridBackupPull.vbs.
@@ -25,6 +25,12 @@
   The age of an archive comes from its NAME (the timestamp that the producer
   writes), not from the file date. sftp get does not keep the dates, and a copy
   keeps the name.
+
+  v1.1 (security audit run 1, PLAN-SECURITY-AUDIT.md): the names come from the-grid, so V4
+  does not trust them. A name must match ^[A-Za-z0-9._-]+$ and its local path must stay
+  in the destination folder, or the script skips it and reports it. A name timestamp
+  later than now + $MaxClockSkewHours is not used for retention or freshness: a
+  future-dated name cannot take the "most recent" slot or stop the freshness alert.
 
   Tests: -DryRun     lists and decides, but does not download, delete or send
                      Telegram.
@@ -51,6 +57,7 @@ $Hosts              = @('192.0.2.20', '198.51.100.20')
 $HostKeyAlias       = '192.0.2.20'
 $RetentionDays      = 36
 $ManifestGraceHours = 3
+$MaxClockSkewHours  = 24   # a name timestamp later than now + this is not trusted
 $LogFile            = 'S:\Bakcup_Servarr+\from-the-grid\the-grid-backup-pull.ndjson'
 $TelegramCfg        = 'S:\Scripts\Tmm\telegram.config.psd1'
 $Header             = "`u{1F5A5} ARCADE `u{00B7} pull backup the-grid"
@@ -111,13 +118,28 @@ function Select-PruneCandidate {
         [Parameter(Mandatory)][datetime]$Now,
         [Parameter(Mandatory)][int]$Days
     )
+    # A future-dated name must not take the slot of the most recent real archive.
+    # It is not deleted here either: the caller reports it.
+    $limit = $Now.AddHours($MaxClockSkewHours)
     $dated = @($Names | ForEach-Object {
         $ts = Get-ArchiveTimestamp $_
-        if ($ts) { [pscustomobject]@{ Name = $_; Ts = $ts } }
+        if ($ts -and $ts -le $limit) { [pscustomobject]@{ Name = $_; Ts = $ts } }
     } | Sort-Object Ts -Descending)
     if ($dated.Count -le 1) { return }
     $cutoff = $Now.AddDays(-$Days)
     $dated | Select-Object -Skip 1 | Where-Object { $_.Ts -lt $cutoff } | ForEach-Object { $_.Name }
+}
+
+function Test-SafeArchiveName {
+    # A remote name goes into an sftp batch line and into a local path. Accept only
+    # one plain path component, and check that the local path stays in $Folder.
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][string]$Folder)
+    if ($Name -cnotmatch '^[A-Za-z0-9._-]+$' -or $Name -in @('.', '..')) { return $false }
+    $root = [IO.Path]::GetFullPath($Folder).TrimEnd('\') + '\'
+    $full = [IO.Path]::GetFullPath((Join-Path $Folder $Name))
+    return $full.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)
 }
 
 function Test-FileMagic {
@@ -204,8 +226,17 @@ function Invoke-SourcePull {
     }
 
     $cutoff = $Now.AddDays(-$RetentionDays)
+    $future = $Now.AddHours($MaxClockSkewHours)
     foreach ($name in $archives) {
+        if (-not (Test-SafeArchiveName -Name $name -Folder $Source.Local)) {
+            $result.Problems.Add("nome non valido su the-grid, ignorato: $($name -replace '[^\x20-\x7E]', '?')")
+            continue
+        }
         $ts = Get-ArchiveTimestamp $name
+        if ($ts -and $ts -gt $future) {
+            $result.Problems.Add("$name : data nel nome nel futuro, ignorato (orologio di the-grid?)")
+            continue
+        }
         $final = Join-Path $Source.Local $name
         if (Test-Path -LiteralPath $final) { continue }
         # Already out of the V4 retention: do not download it again (the-grid can keep it longer).
@@ -262,7 +293,11 @@ function Invoke-SourcePull {
         }
         $result.Pruned += $DryRun ? "$old (dry-run)" : $old
     }
-    $newest = $local | ForEach-Object { Get-ArchiveTimestamp $_ } | Where-Object { $_ } | Sort-Object -Descending | Select-Object -First 1
+    $stamps = @($local | ForEach-Object { Get-ArchiveTimestamp $_ } | Where-Object { $_ })
+    if (@($stamps | Where-Object { $_ -gt $future }).Count) {
+        $result.Problems.Add('archivio su V4 con data nel futuro: controllare il nome e l''orologio di the-grid')
+    }
+    $newest = $stamps | Where-Object { $_ -le $future } | Sort-Object -Descending | Select-Object -First 1
     $result.Newest = $newest
     if (-not $newest) {
         $result.Problems.Add('nessun archivio su V4')
@@ -316,7 +351,10 @@ if ($SelfTest) {
         @{ Label = 'normale';             Names = $names;                        Expected = @($names[0], $names[1]) },
         @{ Label = 'the-grid fermo da mesi';   Names = @($names[0], $names[1]);       Expected = @($names[0]) },
         @{ Label = 'un solo archivio';    Names = @($names[0]);                  Expected = @() },
-        @{ Label = 'nome senza data';     Names = @('senza-data.tar.gz.age');    Expected = @() }
+        @{ Label = 'nome senza data';     Names = @('senza-data.tar.gz.age');    Expected = @() },
+        # v1.1: a future-dated name does not protect itself and does not expose the real ones
+        @{ Label = 'nome nel futuro';     Names = @('the-grid-volumes-2099-12-31T00-00-00.tar.gz.age', $names[1]); Expected = @() },
+        @{ Label = 'futuro + 2 reali';    Names = @('the-grid-volumes-2099-12-31T00-00-00.tar.gz.age', $names[1], $names[3]); Expected = @($names[1]) }
     )
     foreach ($c in $cases) {
         $got = @(Select-PruneCandidate -Names $c.Names -Now $now -Days 36)
@@ -324,6 +362,20 @@ if ($SelfTest) {
         $ok = ((($got | Sort-Object) -join '|') -eq ((@($c.Expected) | Sort-Object) -join '|'))
         if (-not $ok) { $failed++ }
         '{0,-4} retention {1}: {2} da cancellare' -f ($ok ? 'OK' : 'FAIL'), $c.Label, $got.Count
+    }
+    $folder = 'S:\Bakcup_Servarr+\from-the-grid\caveau'
+    $nameChecks = @(
+        @('caveau_db_20261110_011500.sql.gz.age', $true),
+        @('caveau_\..\..\x.age',                   $false),
+        @('caveau_a"b.age',                        $false),
+        @('caveau_a:b.age',                        $false),
+        @('..',                                    $false)
+    )
+    foreach ($c in $nameChecks) {
+        $got = Test-SafeArchiveName -Name $c[0] -Folder $folder
+        $ok = ($got -eq $c[1])
+        if (-not $ok) { $failed++ }
+        '{0,-4} nome {1} -> {2}' -f ($ok ? 'OK' : 'FAIL'), $c[0], $got
     }
     exit ([int]($failed -gt 0))
 }

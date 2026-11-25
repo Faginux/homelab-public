@@ -29,11 +29,11 @@ services:
         source: /srv/docker/spoolman/data
         target: /home/app/.local/share/spoolman
     ports:
-      # No IP restriction: identical to the real behavior on
-      # ARCADE (bind on all the interfaces). Spoolman does not have the
-      # FlareSolverr problem (no auth + risk of abuse). It can also serve other LAN
-      # devices (slicer, OctoPrint), not only ARCADE. Review it if a reason to
-      # restrict it appears.
-      - "7912:8000"
+      # Tailscale IP only (security audit run 1, 2026-11-25). Spoolman has no login:
+      # its only control is the basic_auth of the Caddy route (since 2026-10-27).
+      # A bind on all the interfaces let any LAN device skip it. Caddy, Homepage
+      # and the /spoolman skill reach 198.51.100.20:7912. A LAN client (slicer,
+      # OctoPrint) needs Tailscale or the Caddy route with basic_auth.
+      - "198.51.100.20:7912:8000"
     environment:
       - TZ=Europe/Rome
