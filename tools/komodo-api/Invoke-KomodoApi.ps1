@@ -12,9 +12,9 @@
     config or the secrets (the same discipline as the gate). It puts "<redatto: N caratteri>"
     in their place, so you can see if they are empty, but not their contents.
 
-    Permissions of the user (decided on 2026-10-02): Read + Attach + Logs on the Server
-    arcade only. It can create Stacks and attach them to arcade. It has Write on
-    the Stacks that it creates. It does not see or change the Stacks of the-grid. The
+    Permissions of the user (2026-11-25, read with ListPermissions): Read + Inspect + Logs
+    on the Servers, no Attach, so it cannot create a new Stack. Execute + Inspect + Logs on
+    the listed Stacks. The full table is in README.md. The
     "Regola numero uno" (rule number one) of CLAUDE.md does not change: Deploy, Destroy
     and Delete only after the operator confirms.
 

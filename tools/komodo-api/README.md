@@ -10,15 +10,22 @@ of the browser extension (2026-10-02). For the context, read `PIANO-KOMODO-SECRE
 
 On 2026-10-13, Faginux extended the scope. `claude-ops` is now the tool for actions on Stacks and
 containers. Claude uses it **only** with the authorization of Faginux. `ListPermissions` with the
-real key gives these permissions (2026-10-13, 13:36):
+real key gives these permissions (read again on 2026-11-25, after the security audit):
 
 | What | Permission |
 |---|---|
-| 9 Stacks (`cleanuparr` on V4, 8 on the-grid) | Execute + Inspect + Logs |
-| `tdarr`, `immich`, `qbit_manage` (V4, created by `claude-ops` on 2026-10-14) | Write + Inspect + Logs + Terminal. Komodo gives these permissions to the creator. Faginux sets them to Execute + Inspect + Logs. |
+| 14 Stacks (V4 and the-grid) | Execute + Inspect + Logs |
+| `recyclarr` (V4, created by `claude-ops`) | Write + Inspect + Logs + Terminal. Komodo gives these permissions to the creator; Faginux keeps them on this Stack by choice. |
 | Server `the-grid` | Read + Inspect + Logs |
-| Server `arcade` | Read + Attach + Inspect + Logs. Attach lets Claude create Stacks on V4. |
+| Server `arcade` | Read + Inspect + Logs. **No Attach since 2026-11-25**: the key cannot create a new Stack on V4. |
 | Procedure "Poll updates (mai deploy)" | Execute |
+
+Why Attach is gone (security audit run 1, `PLAN-SECURITY-AUDIT.md`, lead
+`komodo-claude-ops-attach-create-stack-docker-socket-escalation`): with Attach, the key could create
+a Stack on `arcade` and get Write on it as its creator. Periphery on V4 runs as root with the
+Docker socket read-write, so a deploy of that Stack gives full control of Docker Desktop. That is
+more than the Server Execute that the key must not have. To create a new Stack on V4, Faginux gives
+Attach again for that work only, then removes it.
 
 The permissions are per resource. A new Stack needs its permissions again, unless Faginux sets them
 in *Base Permissions on Resource Types*.
