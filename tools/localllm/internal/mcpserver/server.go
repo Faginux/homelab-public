@@ -54,7 +54,7 @@ type extractArgs struct {
 type classifyArgs struct {
 	Paths  []string `json:"paths,omitempty" jsonschema:"absolute paths of the files to classify, 50 at most. Each file gets one label"`
 	Text   string   `json:"text,omitempty" jsonschema:"inline text of 4000 characters at most"`
-	Labels []string `json:"labels" jsonschema:"the permitted labels, 2 to 20. The result uses only these labels"`
+	Labels []string `json:"labels" jsonschema:"the permitted labels, 2 to 20. A label can have a description after a colon, for example \"Bollette: luce, gas, acqua, internet\" (one line, 200 characters at most). The result uses only the label names"`
 	Tier   string   `json:"tier,omitempty" jsonschema:"s (default) or m"`
 }
 

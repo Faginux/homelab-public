@@ -26,6 +26,7 @@
   "max_draft_tokens": 3000,
   "num_ctx": 16384,
   "chunk_chars": 20000,
+  "classify_chars": 8000,
   "max_chunks": 16,
   "request_timeout_seconds": 120,
   "call_timeout_seconds": 300,

@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -38,7 +39,26 @@ type Case struct {
 	Input  string        `json:"input"`
 	Fields []tasks.Field `json:"fields,omitempty"`
 	Labels []string      `json:"labels,omitempty"`
-	Expect Expect        `json:"expect"`
+	// LabelDescriptions gives an optional description for each label name.
+	// The names and the expected label do not change.
+	LabelDescriptions map[string]string `json:"label_descriptions,omitempty"`
+	Expect            Expect            `json:"expect"`
+}
+
+// requestLabels gives the labels of a case in the form of a classify call:
+// "name" or "name: description".
+func (c Case) requestLabels() []string {
+	if len(c.LabelDescriptions) == 0 {
+		return c.Labels
+	}
+	labels := make([]string, len(c.Labels))
+	for i, name := range c.Labels {
+		labels[i] = name
+		if d := c.LabelDescriptions[name]; d != "" {
+			labels[i] = name + ": " + d
+		}
+	}
+	return labels
 }
 
 // Expect is the known answer of a case.
@@ -131,6 +151,11 @@ func LoadCases(dir string) ([]Case, error) {
 		if c.Input == "" || filepath.IsAbs(c.Input) {
 			return nil, fmt.Errorf("eval: case %s: the input must be a path relative to the case folder", c.Name)
 		}
+		for name := range c.LabelDescriptions {
+			if !slices.Contains(c.Labels, name) {
+				return nil, fmt.Errorf("eval: case %s: the description of %q is for a label that is not in the list", c.Name, name)
+			}
+		}
 		c.Input = filepath.Join(dir, c.Input)
 		cases = append(cases, c)
 	}
@@ -159,7 +184,7 @@ func Run(ctx context.Context, runner Runner, loaded Loaded, cases []Case, tier s
 	for _, c := range cases {
 		env := runner.Run(ctx, tasks.Request{
 			Task: c.Task, Style: c.Style, Paths: []string{c.Input},
-			Fields: c.Fields, Labels: c.Labels, Tier: tier,
+			Fields: c.Fields, Labels: c.requestLabels(), Tier: tier,
 		})
 		result := CaseResult{Name: c.Name, Task: c.Task, Status: env.Status, Reason: env.Reason, Model: env.Model}
 		if env.Stats != nil {

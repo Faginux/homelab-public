@@ -157,6 +157,8 @@ type call struct {
 	docs   []document
 	chunks []chunk
 	model  config.LockedModel
+	// labels are the parsed labels of a classify call.
+	labels []Label
 
 	// taint has the secret values of the input. They stay in memory only.
 	taint *redact.Taint

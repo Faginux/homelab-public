@@ -120,6 +120,17 @@ func (c *call) planChunks() *failure {
 		if len(c.docs) > maxClassifyDocs {
 			return fail(StatusTooLarge, "too_many_documents", fmt.Sprintf("one classify call permits %d documents", maxClassifyDocs))
 		}
+		limit = c.cfg.ClassifyInputChars()
+		// The label descriptions go into each prompt. They use the space
+		// above the chunk, so a large set of descriptions makes the part of
+		// the document smaller.
+		if space := c.cfg.PromptCharBudget(c.cfg.MaxOutputTokens) - labelDescriptionChars(c.labels); space < limit {
+			limit = space
+		}
+		if limit < minClassifyInput {
+			return fail(StatusTooLarge, "label_descriptions_too_large",
+				fmt.Sprintf("the label descriptions leave space for %d characters of each document, and classify needs %d", max(limit, 0), minClassifyInput))
+		}
 		// One label for each document: the start of the document is sufficient.
 		for i, doc := range c.docs {
 			head, cut := clip(doc.text, limit)

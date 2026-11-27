@@ -17,8 +17,23 @@ const (
 	maxFieldDescription = 200
 	minLabels           = 2
 	maxLabels           = 20
-	maxClassifyDocs     = 50
+	maxLabelDescription = 200
+	// maxLabelDescriptions is the limit of all label descriptions of one
+	// call. The descriptions go into each prompt of the call.
+	maxLabelDescriptions = 2000
+	maxClassifyDocs      = 50
+	// minClassifyInput is the smallest part of a document that classify
+	// sends. If the label descriptions leave less space, the call stops.
+	minClassifyInput = 1000
 )
+
+// Label is one permitted label of the classify task. The caller writes it
+// as "name" or "name: description". Only the name goes into the schema, so
+// the result is always a name. The description goes into the prompt.
+type Label struct {
+	Name        string
+	Description string
+}
 
 // Field types of the extract task.
 const (
@@ -75,9 +90,11 @@ func (c *call) validate() *failure {
 			return f
 		}
 	case config.TaskClassify:
-		if f := validateLabels(req.Labels); f != nil {
+		labels, f := parseLabels(req.Labels)
+		if f != nil {
 			return f
 		}
+		c.labels = labels
 	case config.TaskDraft:
 		if strings.TrimSpace(req.Instruction) == "" {
 			return badRequest("the instruction is necessary")
@@ -119,19 +136,55 @@ func validateFields(fields []Field) *failure {
 	return nil
 }
 
-func validateLabels(labels []string) *failure {
-	if len(labels) < minLabels || len(labels) > maxLabels {
-		return badRequest("the call needs %d to %d labels", minLabels, maxLabels)
+// parseLabels reads the labels of a classify call. The text before the
+// first colon is the name. The text after it is an optional description.
+// A name cannot have a colon, so the split is not ambiguous.
+func parseLabels(raw []string) ([]Label, *failure) {
+	if len(raw) < minLabels || len(raw) > maxLabels {
+		return nil, badRequest("the call needs %d to %d labels", minLabels, maxLabels)
 	}
+	labels := make([]Label, 0, len(raw))
 	seen := map[string]bool{}
-	for _, label := range labels {
-		if !labelPattern.MatchString(label) {
-			return badRequest("a label must be letters, digits, spaces, dots, hyphens and underscores, 40 characters at most")
+	total := 0
+	for _, text := range raw {
+		name, description, _ := strings.Cut(text, ":")
+		name = strings.TrimSpace(name)
+		description = strings.TrimSpace(description)
+		switch {
+		case !labelPattern.MatchString(name):
+			return nil, badRequest("a label name must be letters, digits, spaces, dots, hyphens and underscores, 40 characters at most")
+		case seen[name]:
+			return nil, badRequest("the label %q is in the list two times", name)
+		case utf8.RuneCountInString(description) > maxLabelDescription || strings.ContainsAny(description, "\r\n"):
+			return nil, badRequest("the description of the label %q must be one line of %d characters at most", name, maxLabelDescription)
 		}
-		if seen[label] {
-			return badRequest("the label %q is in the list two times", label)
-		}
-		seen[label] = true
+		total += utf8.RuneCountInString(description)
+		seen[name] = true
+		labels = append(labels, Label{Name: name, Description: description})
 	}
-	return nil
+	if total > maxLabelDescriptions {
+		return nil, badRequest("the label descriptions have %d characters, and the limit is %d", total, maxLabelDescriptions)
+	}
+	return labels, nil
+}
+
+// labelNames returns the names of the labels, in the order of the caller.
+func labelNames(labels []Label) []string {
+	names := make([]string, len(labels))
+	for i, l := range labels {
+		names[i] = l.Name
+	}
+	return names
+}
+
+// labelDescriptionChars is the size of all label descriptions in the
+// prompt, with the separator of each one.
+func labelDescriptionChars(labels []Label) int {
+	n := 0
+	for _, l := range labels {
+		if l.Description != "" {
+			n += utf8.RuneCountInString(l.Description) + len(": ")
+		}
+	}
+	return n
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -216,6 +217,7 @@ func TestLoadCases(t *testing.T) {
 		{"not JSON", `{"task":`},
 		{"no input", `{"task":"classify"}`},
 		{"absolute input", `{"task":"classify","input":"` + strings.ReplaceAll(filepath.Join(t.TempDir(), "x.txt"), `\`, `\\`) + `"}`},
+		{"description of a label that is not in the list", `{"task":"classify","input":"b.txt","labels":["logs","docs"],"label_descriptions":{"notes":"text notes"},"expect":{"label":"logs"}}`},
 	}
 	for _, tt := range bad {
 		t.Run(tt.name, func(t *testing.T) {
@@ -231,4 +233,23 @@ func TestLoadCases(t *testing.T) {
 			t.Error("LoadCases accepted an empty folder")
 		}
 	})
+}
+
+func TestLabelDescriptionsGoIntoTheRequest(t *testing.T) {
+	c := Case{Name: "k", Task: config.TaskClassify, Input: "k.txt",
+		Labels:            []string{"Bollette", "Casa", "Fisco"},
+		LabelDescriptions: map[string]string{"Bollette": "luce, gas, acqua, internet", "Fisco": "tasse"},
+		Expect:            Expect{Label: "Bollette"}}
+	runner := &scriptedRunner{results: map[string]tasks.Envelope{"k.txt": ok(label("Bollette"), 500)}}
+	loaded := func(context.Context) ([]ollama.LoadedModel, error) { return nil, nil }
+
+	report := Run(context.Background(), runner, loaded, []Case{c}, config.TierS, 7926)
+
+	want := []string{"Bollette: luce, gas, acqua, internet", "Casa", "Fisco: tasse"}
+	if got := runner.seen[0].Labels; !slices.Equal(got, want) {
+		t.Errorf("request labels = %q, want %q", got, want)
+	}
+	if g := report.Groups[config.TaskClassify]; g == nil || g.Labelled != 1 || g.Accuracy != 1 {
+		t.Errorf("the case with the expected label name did not pass: %+v", report.Groups[config.TaskClassify])
+	}
 }

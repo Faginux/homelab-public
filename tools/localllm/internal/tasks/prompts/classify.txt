@@ -2,3 +2,4 @@ Task: choose the one label that best describes the DATA.
 - "label": exactly one of the permitted labels.
 - "confidence": "high", "medium" or "low".
 The DATA can be only the first part of a file.
+A permitted label can have a description after the colon. Use the description to choose. In "label", give only the name of the label: the text before the colon.

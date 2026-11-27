@@ -87,7 +87,11 @@ type Config struct {
 
 	NumCtx     int `json:"num_ctx"`
 	ChunkChars int `json:"chunk_chars"`
-	MaxChunks  int `json:"max_chunks"`
+	// ClassifyChars is the largest part of each document that classify
+	// sends. Zero means chunk_chars. A long input made the classification
+	// worse in the bake-off of M4b.
+	ClassifyChars int `json:"classify_chars"`
+	MaxChunks     int `json:"max_chunks"`
 
 	RequestTimeoutSeconds int    `json:"request_timeout_seconds"`
 	CallTimeoutSeconds    int    `json:"call_timeout_seconds"`
@@ -193,6 +197,12 @@ func (c *Config) Validate() error {
 	if budget := c.PromptCharBudget(c.MaxOutputTokens); c.ChunkChars > budget {
 		add("chunk_chars: %d is more than %d, the largest chunk that leaves space for the answer in a context of %d tokens", c.ChunkChars, budget, c.NumCtx)
 	}
+	if c.ClassifyChars != 0 {
+		checkRange(add, "classify_chars", int64(c.ClassifyChars), 1000, 64000)
+		if budget := c.PromptCharBudget(c.MaxOutputTokens); c.ClassifyChars > budget {
+			add("classify_chars: %d is more than %d, the largest input that leaves space for the answer in a context of %d tokens", c.ClassifyChars, budget, c.NumCtx)
+		}
+	}
 	if budget := c.PromptCharBudget(c.MaxDraftTokens); budget < minPromptChars {
 		add("num_ctx: %d tokens leave no space for a draft of %d tokens", c.NumCtx, c.MaxDraftTokens)
 	}
@@ -291,6 +301,15 @@ func contains(list []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// ClassifyInputChars is the largest part of each document that classify
+// sends: classify_chars, or chunk_chars when classify_chars is not set.
+func (c *Config) ClassifyInputChars() int {
+	if c.ClassifyChars != 0 {
+		return c.ClassifyChars
+	}
+	return c.ChunkChars
 }
 
 // PromptCharBudget returns the largest number of input characters of one

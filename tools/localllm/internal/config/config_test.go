@@ -53,6 +53,7 @@ func TestParseDefaults(t *testing.T) {
 		{"request_timeout_seconds", int64(cfg.RequestTimeoutSeconds), 120},
 		{"audit_retention_days", int64(cfg.AuditRetentionDays), 30},
 		{"chunk_chars", int64(cfg.ChunkChars), 8000},
+		{"classify input with no classify_chars", int64(cfg.ClassifyInputChars()), 8000},
 		{"prompt budget for a result", int64(cfg.PromptCharBudget(cfg.MaxOutputTokens)), 9288},
 		{"prompt budget for a draft", int64(cfg.PromptCharBudget(cfg.MaxDraftTokens)), 7038},
 	}
@@ -113,6 +114,8 @@ func TestParseRefuses(t *testing.T) {
 		{"chunk that leaves no space for the answer", func(d map[string]any) { d["chunk_chars"] = 9289 }, "chunk_chars"},
 		{"chunk too large for a small context", func(d map[string]any) { d["num_ctx"] = 4096; d["chunk_chars"] = 4000 }, "chunk_chars"},
 		{"context too small for a draft", func(d map[string]any) { d["num_ctx"] = 4096; d["chunk_chars"] = 1000 }, "num_ctx"},
+		{"classify input too small", func(d map[string]any) { d["classify_chars"] = 999 }, "classify_chars"},
+		{"classify input that leaves no space for the answer", func(d map[string]any) { d["classify_chars"] = 9289 }, "classify_chars"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

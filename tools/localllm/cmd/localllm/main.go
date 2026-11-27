@@ -64,7 +64,8 @@ Flags of "run":
   --focus <text>        summarize: what the summary must concentrate on
   --field name:type     extract: a field. type is "string" or "list".
                         Optional description: name:type:description
-  --label <label>       classify: a permitted label. Give the flag again
+  --label <label>       classify: a permitted label. Give the flag again.
+                        Optional description: name:description
   --instruction <text>  draft: what the draft must contain
   --kind <kind>         draft: markdown, powershell, yaml or text
   --tier s|m            model tier (default s)

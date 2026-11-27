@@ -89,20 +89,28 @@ type Classifications struct {
 }
 
 // classify gives one label from the list of the caller to each document.
-// The schema permits only these labels, so the model cannot invent one.
+// The schema permits only the label names, so the model cannot invent a
+// label or give a description as the label.
 func (c *call) classify(ctx context.Context) (any, *failure) {
 	sch, err := schema.New(schema.Object(map[string]*jsonschema.Schema{
-		"label":      schema.Enum(c.req.Labels...),
+		"label":      schema.Enum(labelNames(c.labels)...),
 		"confidence": schema.Enum(confidenceValues...),
 	}))
 	if err != nil {
 		return nil, fail(StatusError, "schema_build_failed", "")
 	}
-	instructions := prompt("classify") + "\nPermitted labels:\n- " + strings.Join(c.req.Labels, "\n- ")
+	var instructions strings.Builder
+	instructions.WriteString(prompt("classify") + "\nPermitted labels:")
+	for _, l := range c.labels {
+		instructions.WriteString("\n- " + l.Name)
+		if l.Description != "" {
+			instructions.WriteString(": " + l.Description)
+		}
+	}
 
 	result := Classifications{Results: []Classification{}}
 	for _, ch := range c.chunks {
-		value, f := c.askJSON(ctx, c.userPrompt(instructions, c.label(ch), ch.text), sch)
+		value, f := c.askJSON(ctx, c.userPrompt(instructions.String(), c.label(ch), ch.text), sch)
 		if f != nil {
 			return nil, f
 		}
